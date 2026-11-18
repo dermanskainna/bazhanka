@@ -364,6 +364,6 @@ details summary { cursor: pointer; color: var(--accent); }
 .dash-title { text-align: left; font-family: "Italiana", Georgia, serif; font-weight: 400; text-transform: uppercase; letter-spacing: .05em; font-size: 1.6rem; margin: 28px 0 14px; }
 .custom-occasion { margin-top: 8px; }
 .card.empty .meta-text { max-width: 64ch; margin: 0 auto; }
-.intro-text { font-size: .86rem; max-width: 70ch; }
+.intro-text { font-size: .86rem; max-width: none; }
 details.meta-text summary { font-family: var(--mono); }
 details.meta-text p { margin: 8px 0 0; }
