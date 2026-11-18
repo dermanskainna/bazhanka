@@ -81,9 +81,6 @@ export default function AddFromShop() {
         </select>
       </label>
       {!initial.url && <p className="notice">The button didn’t pass a link. Paste it below or fill the item in by hand.</p>}
-      {params.get('src') === 'page' && (
-        <p className="notice">That page isn’t marked as a product, so we took its heading and main picture. Please check them and add the price.</p>
-      )}
       <ItemForm
         wishlistId={chosen?.id}
         initial={initial}

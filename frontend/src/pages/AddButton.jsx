@@ -111,15 +111,15 @@ export default function AddButton() {
           <p className="muted">{b.manual}</p>
         </details>
 
-        <h3>3. Open a product in any shop and press it</h3>
+        <h3>3. Found something you love? Press it</h3>
         <p className="muted small">
-          A Bazhanka tab opens with the form filled in. Pick the wishlist, check the details and press <b>Add to list</b>.
-          On a page that isn’t a product, the button only shows a short note.
+          Bazhanka opens in a new tab with everything already filled in. Choose a wishlist, take a quick look
+          and press <b>Add to list</b> — that’s it!
         </p>
 
         <p className="muted small">
-          The button reads only the product details of the page you are looking at and passes them to the Bazhanka form;
-          nothing is saved until you press Add to list.
+          Don’t worry about privacy: the button only picks up the product’s name, photo and price, and nothing is saved
+          until you add it yourself.
         </p>
       </div>
 

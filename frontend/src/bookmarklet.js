@@ -5,7 +5,7 @@
 // same product data our server would (JSON-LD Product, Open Graph / itemprop tags) and opens
 // Bazhanka's /add page with the form filled in. The shop sees an ordinary visitor, nothing else.
 // On a page that is not marked as a product (no JSON-LD Product, product Open Graph or price tags)
-// it does not open anything by itself: it shows a small note on the page with an "Add anyway" choice.
+// it opens nothing and only shows a small note on the page.
 //
 // `grab` is turned into a string (`javascript:(...)(origin)`), so it must not use anything from
 // outside its own body: no imports, no outer variables.
@@ -18,7 +18,7 @@ function grab(origin) {
   var text = function (el) { return el ? String(el.textContent || '').replace(/\s+/g, ' ').trim() : ''; };
 
   // A small message in the corner of the shop page (in a shadow root, so the shop's CSS can't touch it).
-  var toast = function (message, action) {
+  var toast = function (message) {
     var old = d.getElementById('bazhanka-toast');
     if (old) old.remove();
     var host = d.createElement('div');
@@ -36,16 +36,11 @@ function grab(origin) {
     var row = d.createElement('div');
     row.style.cssText = 'margin-top:10px;display:flex;gap:8px;justify-content:flex-end';
     var close = function () { host.remove(); };
-    var btn = function (label, primary, fn) {
-      var b = d.createElement('button');
-      b.textContent = label;
-      b.style.cssText = 'cursor:pointer;font:600 13px system-ui,sans-serif;border-radius:4px;padding:6px 12px;border:1px solid #222;' +
-        (primary ? 'background:#222;color:#fff' : 'background:transparent;color:#222');
-      b.onclick = function () { close(); if (fn) fn(); };
-      row.appendChild(b);
-    };
-    if (action) btn(action.label, false, action.run);
-    btn('OK', true);
+    var ok = d.createElement('button');
+    ok.textContent = 'OK';
+    ok.style.cssText = 'cursor:pointer;font:600 13px system-ui,sans-serif;border-radius:4px;padding:6px 14px;border:1px solid #222;background:#222;color:#fff';
+    ok.onclick = close;
+    row.appendChild(ok);
     box.appendChild(head);
     box.appendChild(body);
     box.appendChild(row);
@@ -55,7 +50,7 @@ function grab(origin) {
   };
 
   if (location.origin === origin) {
-    toast('This is Bazhanka itself. Open a product page in any online shop and press the button there.');
+    toast('You’re already on Bazhanka! Open something you like in any online shop and press the button there.');
     return;
   }
 
@@ -120,15 +115,13 @@ function grab(origin) {
     if (/^https?:/.test(out.image)) q.set('image', out.image.slice(0, 2000));
     if (out.price) q.set('price', out.price.slice(0, 40));
     if (out.currency) q.set('currency', out.currency.slice(0, 8));
-    if (!looksLikeProduct) q.set('src', 'page');
     var target = origin + '/add?' + q.toString();
     var w = window.open(target, '_blank');
     if (!w) location.href = target;
   };
 
   if (looksLikeProduct) send();
-  else toast('This page doesn’t look like a product. Open a specific product in the shop and press + Bazhanka again.',
-    { label: 'Add anyway', run: send });
+  else toast('Hmm, we can’t find a product here. Open the page of the item you like and press + Bazhanka again.');
 }
 /* eslint-enable no-var */
 
