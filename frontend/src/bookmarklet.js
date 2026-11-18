@@ -112,10 +112,10 @@ function grab(origin) {
   var PRICE = /^\s*(₴|\$|€|£)?\s*(\d{1,3}(?:[\s ]\d{3})+|\d+)([.,]\d{1,2})?\s*(грн\.?|₴|uah|\$|€|£|zł|usd|eur)?\s*$/i;
   // A price needs a currency sign or word: "29.99 грн", "₴ 1 299", "$15".
   var priceIn = function (t) { if (t.length > 30) return null; var m = t.match(PRICE); return m && (m[1] || m[4]) ? m : null; };
-  var visiblePrice = null;
+  var visiblePrice = null, after = [], before = [];
   if (h1) {
     var all = d.body.querySelectorAll('*');
-    var after = [], before = [];
+    after = []; before = [];
     for (var k = 0; k < all.length; k++) {
       var el = all[k];
       if (/^(SCRIPT|STYLE|NOSCRIPT|OPTION|INPUT|TEXTAREA)$/.test(el.tagName)) continue;
@@ -126,7 +126,7 @@ function grab(origin) {
       var inner = false;
       for (var c = 0; c < el.children.length && !inner; c++) inner = !!priceIn(el.children[c].textContent || '');
       if (inner || !visible(el) || struck(el)) continue;
-      ((h1.compareDocumentPosition(el) & 4) ? after : before).push({ text: t, cur: m[1] || m[4] });
+      ((h1.compareDocumentPosition(el) & 4) ? after : before).push({ text: t, cur: m[1] || m[4], el: el });
     }
     visiblePrice = after[0] || before[0] || null;
   }
@@ -137,7 +137,17 @@ function grab(origin) {
     if (bt.length < 40 && /(у кошик|в кошик|до кошика|додати в кошик|купити|в корзину|купить|add to (cart|bag|basket)|buy now|buy it)/i.test(bt) && visible(buttons[b])) buyButton = true;
   }
   var productUrl = /\/(product|products|p|item|items|goods|dp|tovar|tovary|produkt)\/|\/p\d{4,}|[-_/]\d{5,}(\.html?)?\/?$/i.test(location.pathname);
-  var seen = !marked && !!h1 && !!visiblePrice && (buyButton || productUrl);
+  // A catalogue page also has a heading, prices and cart buttons. On a product page the heading and the
+  // price sit together in a small block; on a catalogue the smallest block holding both is the whole grid.
+  var catalogue = false;
+  if (h1 && visiblePrice) {
+    var box = h1.parentElement;
+    while (box && !box.contains(visiblePrice.el)) box = box.parentElement;
+    var inBox = 0, prices = after.concat(before);
+    for (var pi = 0; pi < prices.length; pi++) if (box && box.contains(prices[pi].el)) inBox++;
+    catalogue = !box || box === d.body || box === d.documentElement || inBox > 3;
+  }
+  var seen = !marked && !!h1 && !!visiblePrice && !catalogue && (buyButton || productUrl);
   var looksLikeProduct = marked || seen;
   // The picture shown biggest on the page, in its best available quality: shops often show a small or
   // blurred version first and keep the sharp one in srcset / <picture> / data-zoom-image.
@@ -164,7 +174,8 @@ function grab(origin) {
     for (var j = 0; j < d.images.length; j++) {
       var im = d.images[j], r = im.getBoundingClientRect();
       var a = r.width * r.height;
-      if (a > area && im.naturalWidth > 0 && /^https?:/.test(im.currentSrc || im.src)) { area = a; best = im; }
+      var banner = r.width > 2 * r.height; // promo banners are wide; product photos are about square or tall
+      if (a > area && !banner && im.naturalWidth > 0 && /^https?:/.test(im.currentSrc || im.src)) { area = a; best = im; }
     }
     return best ? bestSrc(best) : '';
   };
