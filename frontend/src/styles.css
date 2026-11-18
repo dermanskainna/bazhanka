@@ -378,3 +378,8 @@ details.meta-text p { margin: 8px 0 0; }
 .members li { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .member-name { font-family: "Caveat", cursive; font-size: 1.45rem; font-weight: 700; color: var(--accent); line-height: 1.1; }
 .members { list-style: none; padding-left: 0; }
+/* A field label with its note on one line, so fields side by side stay level */
+.label-row { display: inline; }
+.label-row .label-note { margin-left: 4px; }
+/* Page intros are read first: a bit larger than helper lines */
+.lead.meta-text, .meta-text.intro-text { font-size: .9rem; }

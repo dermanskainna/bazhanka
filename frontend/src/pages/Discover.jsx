@@ -115,14 +115,14 @@ export default function Discover() {
       {status && !status.enabled && <p className="notice meta-text">Gift ideas are not switched on yet — please check back soon</p>}
 
       <form className="card stack" onSubmit={search}>
-        <label>What do you like? <small className="label-note">(or who is it for)</small>
+        <label><span className="label-row">What do you like? <small className="label-note">(or who is it for)</small></span>
           <input required minLength={3} maxLength={300} value={interests} onChange={(e) => setInterests(e.target.value)} placeholder="coffee, board games, cozy evenings at home" />
         </label>
         <div className="row">
           {SUGGESTIONS.map((s) => <button key={s} type="button" className="chip-btn" onClick={() => addSuggestion(s)}>{s}</button>)}
         </div>
         <div className="grid2">
-          <label>Budget per gift, ₴ <small className="label-note">(optional)</small>
+          <label><span className="label-row">Budget per gift, ₴ <small className="label-note">(optional)</small></span>
             <input type="number" min="0" step="50" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="1500" />
           </label>
           <label>Add ideas to
