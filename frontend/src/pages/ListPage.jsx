@@ -139,9 +139,10 @@ function OwnerView({ data, reload }) {
   );
 }
 
-function ItemForm({ wishlistId, item, onDone, onCancel }) {
-  const [f, setF] = useState(item ? { ...emptyItem, ...item, price: item.price ?? '', imageUrl: item.imageUrl || '', url: item.url || '', note: item.note || '' } : emptyItem);
-  const [status, setStatus] = useState('');
+// `initial` prefills a new item (used by the "+ Bazhanka" browser button page, /add).
+export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
+  const [f, setF] = useState(item ? { ...emptyItem, ...item, price: item.price ?? '', imageUrl: item.imageUrl || '', url: item.url || '', note: item.note || '' } : { ...emptyItem, ...initial });
+  const [status, setStatus] = useState(initial?.title ? 'button' : '');
   const [error, setError] = useState('');
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
 
@@ -172,7 +173,7 @@ function ItemForm({ wishlistId, item, onDone, onCancel }) {
     try {
       if (item) await api(`/items/${item.id}`, { method: 'PATCH', body: f });
       else await api(`/wishlists/${wishlistId}/items`, { method: 'POST', body: f });
-      onDone();
+      onDone(f);
     } catch (err) {
       setError(err.message);
     }
@@ -188,10 +189,15 @@ function ItemForm({ wishlistId, item, onDone, onCancel }) {
         <small className="muted">
           {status === 'loading' ? 'Looking up the product…' : status === 'ok' ? 'Filled in from the shop — check it below.' :
             status === 'partial' ? 'The shop shared only part of the details — please complete them.' :
-            status === 'failed' ? 'Could not read that page — fill the item in by hand.' : 'Paste a link and we try to fill in title, photo and price.'}
+            status === 'failed' ? 'Could not read that page — fill the item in by hand.' :
+            status === 'button' ? 'Filled in from the shop page you opened — check it below.' : 'Paste a link and we try to fill in title, photo and price.'}
         </small>
       </label>
-      {status === 'failed' && error && <p className="notice">{error}</p>}
+      {status === 'failed' && error && (
+        <p className="notice">
+          {error}. <Link to="/button">Use the “+ Bazhanka” browser button</Link> to fill it in from the shop page you have open.
+        </p>
+      )}
       {f.imageUrl && <img className="preview-img" src={f.imageUrl} alt="" referrerPolicy="no-referrer" />}
       <label>Title<input required value={f.title} onChange={set('title')} placeholder="What do you want?" /></label>
       <div className="grid2">

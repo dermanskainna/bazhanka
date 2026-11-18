@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Bazhanka frontend & API gateway: Vite React static build in a private S3 bucket
-  served by CloudFront, proxying /api/* and /healthz to the Lambda Function URL.
+  served by CloudFront, proxying /api/* and /healthz to the Lambda Function URL, and the routes that
+  need the internet (link preview, gift ideas) to the edge function.
 Parameters:
   ProjectName:
     Type: String
@@ -9,6 +10,12 @@ Parameters:
   BackendDomain:
     Type: String
     Description: Domain of the Lambda Function URL (without https://)
+  EdgeDomain:
+    Type: String
+    Default: ""
+    Description: >-
+      Domain of the edge function URL (without https://). It serves link preview and gift ideas,
+      which need the internet. Empty = everything goes to BackendDomain.
   DomainName:
     Type: String
     Default: ""
@@ -26,6 +33,7 @@ Parameters:
 Conditions:
   HasFreePlan: !Equals [!Ref PricingPlan, FREE]
   HasDomain: !Not [!Equals [!Ref DomainName, ""]]
+  HasEdge: !Not [!Equals [!Ref EdgeDomain, ""]]
   HasZone: !And
     - !Condition HasDomain
     - !Not [!Equals [!Ref HostedZoneId, ""]]
@@ -107,9 +115,49 @@ Resources:
             CustomOriginConfig:
               HTTPSPort: 443
               OriginProtocolPolicy: https-only
-              # Gift-idea search calls an AI model with live web search and can take 20-40 s.
               OriginReadTimeout: 60
+          - !If
+            - HasEdge
+            - Id: edge
+              DomainName: !Ref EdgeDomain
+              CustomOriginConfig:
+                HTTPSPort: 443
+                OriginProtocolPolicy: https-only
+                # Gift-idea search calls an AI model with live web search and can take 20-40 s.
+                OriginReadTimeout: 60
+            - !Ref "AWS::NoValue"
+        # Order matters: the first matching pattern wins, so the edge routes come before /api/*.
         CacheBehaviors:
+          - !If
+            - HasEdge
+            - PathPattern: /api/preview
+              TargetOriginId: edge
+              ViewerProtocolPolicy: redirect-to-https
+              AllowedMethods: [DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT]
+              CachedMethods: [GET, HEAD]
+              CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+              OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            - !Ref "AWS::NoValue"
+          - !If
+            - HasEdge
+            - PathPattern: /api/discover/*
+              TargetOriginId: edge
+              ViewerProtocolPolicy: redirect-to-https
+              AllowedMethods: [DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT]
+              CachedMethods: [GET, HEAD]
+              CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+              OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            - !Ref "AWS::NoValue"
+          - !If
+            - HasEdge
+            - PathPattern: /api/admin/discover-check
+              TargetOriginId: edge
+              ViewerProtocolPolicy: redirect-to-https
+              AllowedMethods: [GET, HEAD]
+              CachedMethods: [GET, HEAD]
+              CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+              OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            - !Ref "AWS::NoValue"
           - PathPattern: /api/*
             TargetOriginId: api
             ViewerProtocolPolicy: redirect-to-https

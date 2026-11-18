@@ -21,6 +21,7 @@ Team: Inna Dermanska, Bohdana Skochynska, Ksenia Nimas (UCU).
 | Add an item by pasting a shop link: title, photo and price are filled in automatically when the shop allows it (JSON-LD / Open Graph); otherwise fill the item in by hand | owner view of a list |
 | Secret reservation: guests see "already reserved", the owner sees nothing | guest view of a list |
 | Chip in: several guests add amounts to one gift, with a progress bar | items marked "chip-in" |
+| Add from any shop with the “+ Bazhanka” browser button (bookmarklet), also where a pasted link can’t be read | `/button`, `/add` |
 | Secret Santa: invite link, the organiser draws names, each member sees only their giftee and their list | `/santa` |
 | "Gifts I'm giving" across all lists | `/dashboard` |
 | In-app feedback button and a metrics page for the validation goals | Feedback button, `/admin` |
@@ -31,8 +32,8 @@ Signed-in users open **Gift ideas** (`/ideas`), describe what they like and get 
 
 How it works (`backend/src/discover.js`, `bedrock.js`, `routes/discover.js`):
 
-1. One call to **Amazon Nova 2 Lite on Amazon Bedrock** with the built-in **web grounding** tool searches the web and returns candidate products, each marked `direct` (fits the interests) or `adjacent` (related, shown as **Try something new**).
-2. A candidate is kept only if its shop appeared in the search citations. Then the product page is read with the existing link-preview code, so title, photo and price come from the real page rather than from the model. Shops that block bots stay in the list without price and photo.
+1. **Amazon Nova 2 Lite on Bedrock** with the built-in **web grounding** tool searches the web for shops that deliver in the user's country (`DISCOVER_COUNTRY`, default `UA`: searches in Ukrainian, `site:` queries on Ukrainian shops, Etsy/Amazon/eBay are excluded, AliExpress and Temu are allowed) and returns candidate products, each `direct` or `adjacent` (**Try something new**).
+2. **The model is never trusted for links.** Every candidate page is opened by the server. A card is kept only if the page opens, does not redirect to a home page, looks like a product page (JSON-LD Product / `og:type=product` / price) and its title agrees with what the model said. Title, photo and price shown on the card come from the real page, so the caption always matches the link. Fake hosts (`example.com`…), dead links and non-product pages are dropped; if too few survive, a second round asks again and tells the model which links were invalid. A shop that blocks bots is shown (marked "could not open automatically") only if the exact URL appeared in the search tool's own results.
 3. Results are cached for 24 h per normalized query and each user has a daily limit of fresh searches (`DISCOVER_DAILY_LIMIT`, default 5), which keeps the AI bill predictable.
 4. **Partner shops** (admin page → *Gift ideas: partner shops*) are searched explicitly and ranked higher, always with a visible **Partner** mark. Ranking puts relevance first: a partner only moves up inside its relevance group, so an off-topic partner product never beats a direct match. Partners apply at read time, so pausing or adding one affects cached results at once.
 5. The funnel per partner (shown → clicked → added to a list) is counted in `discover_events` and shown in the admin page; it is the evidence to show a shop when selling placement.
@@ -43,7 +44,7 @@ Cost and AWS notes:
 
 - Web grounding is only available in US regions (this project runs in `us-east-1`) and is billed on top of model tokens; check the [Bedrock pricing page](https://aws.amazon.com/bedrock/pricing/). Amazon's own Nova models are billed as an AWS service, so AWS promotional credits should apply; third-party models (such as Claude) are usually billed through AWS Marketplace, which credits typically do not cover. Confirm under *Billing → Credits* before relying on it.
 - The Lambda role gets `bedrock:InvokeModel` and `bedrock:InvokeTool` (see `infra/backend.yml`). Enable access to the Nova model in the Bedrock console if your account asks for it.
-- **The backend Lambda runs inside a VPC without internet access** (symptom in the logs: `discover search failed: fetch failed` after ~10 s). `infra/backend.yml` therefore creates a `bedrock-runtime` VPC interface endpoint (about $7/month, parameter `CreateBedrockEndpoint`). Bedrock then works, but shop pages cannot be read, so cards have no photo and only an approximate price. A NAT gateway (about $32/month) would also enable reading shop pages (and the existing link-preview); then set `CreateBedrockEndpoint=false`.
+- On AWS, gift ideas and link preview are served by a separate **edge Lambda outside the VPC**, so it reads shop pages and calls Bedrock over the normal internet: no NAT gateway and no VPC endpoint, nothing extra to pay. See [Deploy on AWS](#deploy-on-aws) for how it reaches the database.
 - CloudFront waits up to 60 s for the API (`OriginReadTimeout` in `infra/frontend.yml`) because a live search can take 20–40 s.
 - Paid placement must be clearly labelled as advertising. Check local advertising rules before signing the first partner.
 
@@ -55,11 +56,13 @@ backend/    Node.js + Express API, PostgreSQL (pg). Also serves the built fronte
   src/db.js              connection pool + schema (created automatically on start)
   src/auth.js            JWT session cookie, password hashing in routes/auth.js
   src/preview.js         shop link → title/photo/price (with SSRF protection)
+  src/dbrpc.js           AWS only: signed SQL calls from the edge Lambda to the main Lambda
   src/routes/            auth, wishlists/items/reservations, santa, feedback/stats
   test/api.test.js       integration tests (needs Postgres)
 frontend/   React 18 + Vite single-page app
   src/pages/             Home, Auth, Dashboard, ListPage (owner + guest views), Santa, Admin
-infra/      Dockerfile, docker-compose.yml (local), render.yaml (deployment)
+infra/      Dockerfile, docker-compose.yml (local), render.yaml (Render),
+            ecr.yml / backend.yml / frontend.yml / certificate.sh (AWS, driven by the Makefile)
 docs/       report template for the user-testing report
 ```
 
@@ -143,6 +146,57 @@ docker build -f infra/Dockerfile -t bazhanka .
 docker run -p 3000:3000 -e DATABASE_URL=... -e JWT_SECRET=... bazhanka
 ```
 
+## Deploy on AWS
+
+The production site runs on AWS in `us-east-1`, described by CloudFormation templates in `infra/` and driven by the `Makefile`
+(details and operations: `docs/aws_deployment_architecture_and_operations_report.md`).
+
+```
+CloudFront ─┬─ /*  ───────────────────────────────▶ S3 (built frontend)
+            ├─ /api/preview, /api/discover/*,
+            │  /api/admin/discover-check ─────────▶ Lambda bazhanka-edge (no VPC: internet, Bedrock)
+            │                                            │ SQL via lambda:Invoke (HMAC-signed)
+            └─ other /api/*, /healthz ────────────▶ Lambda bazhanka-backend (in the VPC)
+                                                         │ TCP 5432, SSL
+                                                         ▼
+                                                  Aurora Serverless v2 PostgreSQL (private)
+```
+
+Why two functions: Aurora is private, so the main function has to run inside the VPC, and a VPC Lambda gets no internet access
+without a NAT gateway (about $32/month) or VPC endpoints (about $7/month each). The routes that need the internet run in the
+edge function outside the VPC instead. Both functions are built from the same image. The edge function has no route to the
+database; it sends each query to the main function with `lambda:Invoke` (`DB_MODE=rpc`, `backend/src/dbrpc.js`). The main
+function accepts those calls on `/internal/db` only as invoke events (not as HTTP requests through its Function URL), and only
+with a fresh HMAC signature made with a key derived from `JWT_SECRET`. Routes that need a transaction (Secret Santa,
+reservations) always stay on the main function. The database is never opened to the internet.
+
+Cost: the edge function and the invokes fit in the Lambda free tier (1M requests and 400,000 GB-s per month), so this costs
+nothing extra. What you still pay for: Aurora storage and the time it is awake (it pauses after 5 idle minutes), and Bedrock
+tokens and web grounding for each fresh gift-idea search (capped by `DISCOVER_DAILY_LIMIT`).
+
+Set-up: put `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DB_PASSWORD` (long random, letters/digits/`_`/`-` only) and
+`AWS_JWT_SECRET` (at least 16 characters) in a `.env` file in the repository root. It is gitignored: never commit it. Optional:
+`AWS_ADMIN_EMAILS`, `AWS_DONATION_URL`, `AWS_FRONTEND_DOMAIN` (custom domain with a Route 53 zone; run `make aws-frontend-cert`
+once). The Makefile needs `make`, `docker` and a POSIX shell. On Windows it uses Git Bash from `C:\Program Files\Git`; if Git
+lives elsewhere, add for example `GIT_BASH=d:/Git/bin/bash.exe` to `.env`.
+
+```bash
+make aws-db-snapshot
+```
+
+```bash
+make aws-plan-backend
+```
+
+```bash
+make aws-deploy
+```
+
+`aws-db-snapshot` keeps a manual Aurora snapshot (do it before any infrastructure change; the cluster also has
+`DeletionPolicy: Snapshot`). `aws-plan-backend` shows what the backend update would change without applying it: no database resource
+may say `Replacement: True`. `aws-deploy` pushes the image, updates the backend stack (both functions) and then the frontend
+stack and files. Logs: `make aws-logs` (main function) and `make aws-logs-edge` (preview and gift ideas).
+
 ## Measuring the validation goals
 
 Sign in with an email listed in `ADMIN_EMAILS` and open `/admin`. It shows, live, the goals from our one-pager:
@@ -154,4 +208,8 @@ sign-ups (goal 50), wishlists (20), % of guests who reserved (≥ 30%), % of gue
 - Reservation data is never sent to the list owner's browser; it's filtered on the server, not hidden in the UI.
 - Passwords are hashed with bcrypt; sessions are signed httpOnly, SameSite=Lax cookies (Secure in production).
 - The link-preview fetcher refuses private/internal addresses and limits redirects, time and size.
-- Some large shops block automated requests; then the form simply asks the user to fill the details in by hand.
+- Some shops block automated requests, and our link preview deliberately does not pretend to be a browser. For those shops
+  the form points to the **“+ Bazhanka” browser button** (`/button`): a bookmarklet that runs in the person's own browser on the
+  product page they already opened, reads the same product data (JSON-LD `Product`, Open Graph / `itemprop` tags, otherwise
+  the heading and the biggest picture) and opens `/add` with the form prefilled. The shop sees an ordinary visitor; nothing is
+  saved until the person presses *Add to list*. Code: `frontend/src/bookmarklet.js`, pages `AddButton.jsx` and `AddFromShop.jsx`.

@@ -1,7 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  Bazhanka backend on AWS: Lambda (Node.js 22 + Express via Web Adapter) behind
-  a Function URL, talking to an Aurora Serverless v2 PostgreSQL cluster.
+  Bazhanka backend on AWS: two Lambda functions from one container image (Node.js 22 + Express via
+  Web Adapter), each behind a Function URL. The main function runs in the VPC next to an Aurora
+  Serverless v2 PostgreSQL cluster. The edge function runs outside the VPC, so it can read shop pages
+  and call Bedrock, and reaches the database by invoking the main function.
 Parameters:
   ProjectName:
     Type: String
@@ -61,14 +63,6 @@ Parameters:
     Default: "true"
     AllowedValues: ["true", "false"]
     Description: Switch the AI gift-ideas search (Amazon Nova + web grounding) on or off
-  CreateBedrockEndpoint:
-    Type: String
-    Default: "true"
-    AllowedValues: ["true", "false"]
-    Description: >-
-      The function runs in a VPC without a NAT gateway, so it cannot reach the internet. This adds a
-      VPC interface endpoint for Bedrock Runtime (about $7/month for one subnet) so the AI search works.
-      Set to false if the VPC already has a NAT gateway or a bedrock-runtime endpoint.
   DiscoverModelId:
     Type: String
     Default: us.amazon.nova-2-lite-v1:0
@@ -80,7 +74,6 @@ Parameters:
 
 Conditions:
   HasDbEngineVersion: !Not [!Equals [!Ref DbEngineVersion, ""]]
-  CreateBedrockEndpoint: !Equals [!Ref CreateBedrockEndpoint, "true"]
 
 Resources:
   FunctionSecurityGroup:
@@ -111,38 +104,6 @@ Resources:
         - Key: PROJECT_NAME
           Value: !Ref ProjectName
 
-  BedrockEndpointSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Condition: CreateBedrockEndpoint
-    Properties:
-      GroupDescription: !Sub "${ProjectName} bedrock-runtime endpoint"
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          SourceSecurityGroupId: !Ref FunctionSecurityGroup
-          Description: HTTPS from the backend function
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-bedrock-endpoint"
-        - Key: PROJECT_NAME
-          Value: !Ref ProjectName
-
-  # One subnet only to keep the cost low; with private DNS the function reaches it from any AZ.
-  BedrockRuntimeEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Condition: CreateBedrockEndpoint
-    Properties:
-      VpcEndpointType: Interface
-      VpcId: !Ref VpcId
-      ServiceName: !Sub "com.amazonaws.${AWS::Region}.bedrock-runtime"
-      SubnetIds:
-        - !Select [0, !Ref SubnetIds]
-      SecurityGroupIds:
-        - !Ref BedrockEndpointSecurityGroup
-      PrivateDnsEnabled: true
-
   DbSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -153,10 +114,12 @@ Resources:
         - Key: PROJECT_NAME
           Value: !Ref ProjectName
 
+  # Real user data lives here: if the stack is deleted, or a change ever forces CloudFormation to
+  # replace the cluster, a final snapshot is taken first instead of losing the data.
   DbCluster:
     Type: AWS::RDS::DBCluster
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBClusterIdentifier: !Sub "${ProjectName}-db"
       Engine: aurora-postgresql
@@ -203,21 +166,6 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
-      Policies:
-        - PolicyName: bedrock-gift-ideas
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              # US cross-region inference profile of the model, and the model in the regions it routes to.
-              - Effect: Allow
-                Action: [bedrock:InvokeModel]
-                Resource:
-                  - !Sub "arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/${DiscoverModelId}"
-                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/*"
-              # Nova web grounding is a Bedrock system tool and needs its own permission.
-              - Effect: Allow
-                Action: [bedrock:InvokeTool]
-                Resource: !Sub "arn:${AWS::Partition}:bedrock::${AWS::AccountId}:system-tool/amazon.nova_grounding"
       Tags:
         - Key: PROJECT_NAME
           Value: !Ref ProjectName
@@ -264,10 +212,11 @@ Resources:
           ADMIN_EMAILS: !Ref AdminEmails
           DONATION_URL: !Ref DonationUrl
           DONATION_LABEL: !Ref DonationLabel
-          DISCOVER_ENABLED: !Ref DiscoverEnabled
-          DISCOVER_MODEL_ID: !Ref DiscoverModelId
-          DISCOVER_DAILY_LIMIT: !Ref DiscoverDailyLimit
-          BEDROCK_REGION: !Ref "AWS::Region"
+          # Gift ideas and link preview are served by EdgeFunction (CloudFront routes them there).
+          DISCOVER_ENABLED: "false"
+          # Accept signed SQL calls from EdgeFunction (lambda:Invoke -> Web Adapter pass-through).
+          DB_RPC_SERVER: "true"
+          AWS_LWA_PASS_THROUGH_PATH: /internal/db
       Tags:
         - Key: PROJECT_NAME
           Value: !Ref ProjectName
@@ -295,6 +244,110 @@ Resources:
       Principal: "*"
       InvokedViaFunctionUrl: true
 
+  # ---------- Edge function: outside the VPC, so it has internet access (free, no NAT) ----------
+
+  EdgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: database-via-main-function
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [lambda:InvokeFunction]
+                Resource: !GetAtt ApiFunction.Arn
+        - PolicyName: bedrock-gift-ideas
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # US cross-region inference profile of the model, and the model in the regions it routes to.
+              - Effect: Allow
+                Action: [bedrock:InvokeModel]
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock:*:${AWS::AccountId}:inference-profile/${DiscoverModelId}"
+                  - !Sub "arn:${AWS::Partition}:bedrock:*::foundation-model/*"
+              # Nova web grounding is a Bedrock system tool and needs its own permission.
+              - Effect: Allow
+                Action: [bedrock:InvokeTool]
+                Resource: !Sub "arn:${AWS::Partition}:bedrock::${AWS::AccountId}:system-tool/amazon.nova_grounding"
+      Tags:
+        - Key: PROJECT_NAME
+          Value: !Ref ProjectName
+
+  EdgeLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectName}-edge"
+      RetentionInDays: 7
+      Tags:
+        - Key: PROJECT_NAME
+          Value: !Ref ProjectName
+
+  EdgeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-edge"
+      Description: Bazhanka link preview and gift ideas (no VPC, database via the main function)
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      Architectures:
+        - !Ref Architecture
+      Role: !GetAtt EdgeRole.Arn
+      MemorySize: !Ref MemorySize
+      Timeout: 60
+      LoggingConfig:
+        LogGroup: !Ref EdgeLogGroup
+      Environment:
+        Variables:
+          NODE_ENV: production
+          PORT: "3000"
+          # Ready as soon as Express listens; /healthz would wake Aurora on every cold start.
+          AWS_LWA_READINESS_CHECK_PATH: /livez
+          DB_MODE: rpc
+          DB_RPC_FUNCTION: !Ref ApiFunction
+          JWT_SECRET: !Ref JwtSecret
+          ADMIN_EMAILS: !Ref AdminEmails
+          DISCOVER_ENABLED: !Ref DiscoverEnabled
+          DISCOVER_MODEL_ID: !Ref DiscoverModelId
+          DISCOVER_DAILY_LIMIT: !Ref DiscoverDailyLimit
+          BEDROCK_REGION: !Ref "AWS::Region"
+      Tags:
+        - Key: PROJECT_NAME
+          Value: !Ref ProjectName
+
+  EdgeFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt EdgeFunction.Arn
+      AuthType: NONE
+      InvokeMode: BUFFERED
+
+  EdgeFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref EdgeFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: "*"
+      FunctionUrlAuthType: NONE
+
+  EdgeFunctionUrlInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref EdgeFunction
+      Action: lambda:InvokeFunction
+      Principal: "*"
+      InvokedViaFunctionUrl: true
+
 Outputs:
   ApiUrl:
     Value: !Sub ["https://${Host}", {Host: !Select [2, !Split ["/", !GetAtt FunctionUrl.FunctionUrl]]}]
@@ -304,3 +357,7 @@ Outputs:
     Value: !GetAtt DbCluster.Endpoint.Address
   FunctionName:
     Value: !Ref ApiFunction
+  EdgeFunctionUrlDomain:
+    Value: !Select [2, !Split ["/", !GetAtt EdgeFunctionUrl.FunctionUrl]]
+  EdgeFunctionName:
+    Value: !Ref EdgeFunction

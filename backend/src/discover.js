@@ -31,29 +31,94 @@ export function findPartner(host, partners) {
   return partners.find((p) => host === p.domain || host.endsWith(`.${p.domain}`)) || null;
 }
 
+// ---------- region ----------
+
+// Shops that deliver in the country; used to steer the search (never to fabricate links).
+export const REGIONS = {
+  UA: {
+    name: 'Ukraine',
+    language: 'Ukrainian',
+    shops: [
+      'rozetka.com.ua', 'prom.ua', 'epicentrk.ua', 'allo.ua', 'foxtrot.ua', 'comfy.ua', 'eva.ua',
+      'makeup.ua', 'kasta.ua', 'yakaboo.ua', 'hobbygames.ua', 'geekach.com.ua', 'brain.com.ua',
+    ],
+  },
+};
+export const country = () => (REGIONS[process.env.DISCOVER_COUNTRY] ? process.env.DISCOVER_COUNTRY : 'UA');
+
+// Foreign marketplaces that dominated the results for Ukrainian users and are not useful gifts there.
+const FOREIGN_MARKETPLACE = /(^|\.)(etsy|ebay|wish|shein|pinterest|amazon|walmart|wayfair)\.[a-z.]+$/;
+// Reserved / made-up hosts the model sometimes writes instead of a real link (RFC 2606 etc.).
+const PLACEHOLDER_HOST = /(^|\.)example\.(com|org|net|edu)$|\.(example|test|invalid|localhost|local)$/;
+
+export function isPlaceholderHost(host) {
+  return !host || host === 'localhost' || PLACEHOLDER_HOST.test(host);
+}
+export function isForeignMarketplace(host) {
+  return !!host && FOREIGN_MARKETPLACE.test(host);
+}
+
+// Compares two URLs ignoring scheme, "www.", query string, hash and a trailing slash.
+export function normalizeUrl(u) {
+  try {
+    const x = new URL(u);
+    return `${x.hostname.toLowerCase().replace(/^www\./, '')}${x.pathname.replace(/\/+$/, '')}`;
+  } catch { return null; }
+}
+
+// Do two product titles talk about the same thing? True when they share at least one word
+// (compared by 5-letter stems so "наборів"/"набір" match) or when either has no usable words.
+export function titlesAgree(a, b) {
+  const stems = (t) => new Set((String(t || '').toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []).map((w) => w.slice(0, 5)));
+  const A = stems(a), B = stems(b);
+  if (!A.size || !B.size) return true;
+  for (const w of A) if (B.has(w)) return true;
+  return false;
+}
+
+// Version prefix: bump it whenever the pipeline changes so old (possibly wrong) cached results die.
+const CACHE_VERSION = 'v3';
 export function cacheKey({ interests, budget, currency }) {
   const norm = String(interests).toLowerCase().replace(/[^\p{L}\p{N}\s,]/gu, ' ').split(/[\s,]+/).filter(Boolean).sort().join(' ');
   const b = budget ? Math.ceil(Number(budget) / 500) * 500 : 0; // coarse buckets so near-identical budgets share a cache entry
-  return crypto.createHash('sha256').update(`${norm}|${b}|${currency}`).digest('hex').slice(0, 40);
+  return crypto.createHash('sha256').update(`${CACHE_VERSION}|${country()}|${norm}|${b}|${currency}`).digest('hex').slice(0, 40);
 }
 
-export const SYSTEM_PROMPT = `You are a gift-idea scout for a wishlist website used mostly in Ukraine.
-Use web search to find REAL products that can be bought online right now. Never invent products, shops or links.
-Reply with ONLY a JSON array (no prose, no markdown). Each element:
-{"title": string, "url": string (direct product page you found), "fit": "direct" | "adjacent", "why": string (max 140 chars, same language as the user's interests), "price": number or null (only if you saw it in the search results, otherwise null), "currency": "UAH" | "USD" | "EUR" | null}
-- "direct": clearly matches the person's interests.
-- "adjacent": not exactly what they asked for, but related enough to be a pleasant discovery.
-Output the JSON array and nothing else: no introduction, no explanations. Give 8 to 10 items, a mix of about 70% direct and 30% adjacent, from different shops. Prefer shops that deliver in Ukraine.`;
+// ---------- prompt ----------
 
-export function buildPrompt({ interests, budget, currency }, partners) {
+export function systemPrompt(code = country()) {
+  const r = REGIONS[code];
+  return `You find real products that can be bought online right now, for a wishlist website. The user lives in ${r.name}.
+
+RULES - follow them strictly:
+1. Use web search. Every item must come from a page that you actually found in the search results.
+2. "url" must be copied character by character from a search result. Never guess, shorten, construct or "fix" a URL. If you are not certain that a product page exists at that exact URL, leave the item out. A few correct items are far better than many doubtful ones.
+3. "url" must be the page of ONE specific product - not a category, search, brand or home page.
+4. "title" must be the product name exactly as it is written on that page (keep the page's language).
+5. Shops: online shops that deliver in ${r.name}, preferably with a local domain. Search in ${r.language} (for example "<product> купити") and use "site:" queries for these shops: ${r.shops.join(', ')}. AliExpress and Temu are allowed. Do NOT use etsy, amazon, ebay or other foreign marketplaces.
+6. "why": one short sentence (max 140 characters) in the language of the person's interests that explains why THIS product suits them.
+
+Reply with ONLY a JSON array, no introduction and no explanations. Each element:
+{"title": string, "url": string, "fit": "direct" | "adjacent", "why": string, "price": number or null (only if you saw it in the search results), "currency": "UAH" | "USD" | "EUR" | null}
+- "direct": clearly matches the person's interests.
+- "adjacent": not exactly what they asked for, but close enough to be a pleasant discovery.
+Give up to 12 items, about 70% direct and 30% adjacent, from different shops.`;
+}
+
+export function buildPrompt({ interests, budget, currency }, partners, { failed = [] } = {}) {
   const lines = [`Interests / who the gift is for: ${interests}`];
   if (budget) lines.push(`Budget per item: up to ${budget} ${currency}`);
   const active = partners.filter((p) => p.active);
   if (active.length) {
-    lines.push(`Search these partner shops explicitly (for example with "site:" queries) and include their relevant products when they exist: ${active.map((p) => p.domain).join(', ')}.`);
+    lines.push(`Also search these partner shops explicitly (with "site:" queries) and include their relevant products when they exist: ${active.map((p) => p.domain).join(', ')}.`);
+  }
+  if (failed.length) {
+    lines.push(`These links from your previous answer turned out to be invalid or not product pages - do not repeat them, and look harder for pages that really exist:\n${failed.slice(0, 15).join('\n')}`);
   }
   return lines.join('\n');
 }
+
+// ---------- parsing ----------
 
 // Splits "[{...},{...}" (possibly truncated or followed by prose) into its complete top-level objects.
 function salvageObjects(text) {
@@ -73,7 +138,8 @@ function salvageObjects(text) {
 }
 
 // Pulls the product list out of a model reply, tolerating code fences, surrounding prose and a
-// reply that was cut off in the middle of the array.
+// reply that was cut off in the middle of the array. Placeholder hosts and foreign marketplaces
+// are dropped here, before anything is fetched.
 export function parseCandidates(text) {
   let arr = null;
   const start = text.indexOf('[');
@@ -88,6 +154,8 @@ export function parseCandidates(text) {
     const url = httpUrl(c?.url);
     const title = typeof c?.title === 'string' ? c.title.replace(/\s+/g, ' ').trim().slice(0, 300) : '';
     if (!url || !title || seen.has(url)) continue;
+    const host = hostOf(url);
+    if (isPlaceholderHost(host) || isForeignMarketplace(host)) continue;
     seen.add(url);
     out.push({
       title,
@@ -101,8 +169,11 @@ export function parseCandidates(text) {
   return out;
 }
 
+// ---------- ranking ----------
+
 // Final ordering. Relevance comes first: paid placement only reorders results inside the same
-// relevance group, it never lets an irrelevant partner product beat a direct match.
+// relevance group, it never lets an irrelevant partner product beat a direct match. Inside a group,
+// cards checked against the real page come before unchecked ones.
 // Returned offers carry a label: 'match' | 'new', plus `partner` ({ id, name } | null).
 export function rankOffers(offers, partners) {
   const decorated = offers.map((o, i) => {
@@ -110,7 +181,7 @@ export function rankOffers(offers, partners) {
     return { ...o, partner: partner ? { id: partner.id, name: partner.name } : null, _boost: partner ? partner.boost : 0, _i: i };
   });
   const group = (o) => (o.fit === 'direct' ? 0 : 1);
-  decorated.sort((a, b) => group(a) - group(b) || b._boost - a._boost || a._i - b._i);
+  decorated.sort((a, b) => group(a) - group(b) || (b.verified ? 1 : 0) - (a.verified ? 1 : 0) || b._boost - a._boost || a._i - b._i);
 
   // Keep roughly 1 "try something new" per 4 cards, interleaved instead of dumped at the end.
   const direct = decorated.filter((o) => o.fit === 'direct');
@@ -124,56 +195,102 @@ export function rankOffers(offers, partners) {
   return merged.map(({ _boost, _i, ...o }) => ({ ...o, label: o.fit === 'direct' ? 'match' : 'new' }));
 }
 
-// ---------- search pipeline ----------
+// ---------- verification ----------
 
 const strip = ({ seenPrice, seenCurrency, ...o }) => o;
 
-// Decide which candidates to show.
-// - Candidates whose page can be read are verified from the real page (title / image / price).
-// - A page that answers 404/410 is a dead (probably invented) link and is dropped.
-// - Pages we cannot read (shop blocks bots, or no internet from the server) are kept as
-//   "unverified" - but only if the shop appeared in the search citations. If the model returned
-//   no citations at all we cannot apply that check, so they are kept and flagged as unverified.
-async function verify(candidates, citations, debug) {
-  const cited = new Set(citations.flatMap((c) => [baseDomain(hostOf(c.url)), baseDomain(normDomain(c.domain))]).filter(Boolean));
-  const useCitations = cited.size > 0;
-  debug.useCitations = useCitations;
-  const checked = await Promise.all(candidates.slice(0, 12).map(async (c) => {
-    const host = hostOf(c.url);
-    if (!host) return null;
-    if (useCitations && !cited.has(baseDomain(host))) { debug.notCited.push(host); return null; }
+// Checks candidates against the REAL pages. The model is never trusted for what is shown:
+//  - the page must open, must not redirect to a home page, and must look like a product page;
+//  - title, photo and price come from the page, so the caption always matches the link;
+//  - the model's "why" is kept only when its title and the page title talk about the same thing;
+//  - dead links (404, no such domain, no answer) are dropped;
+//  - a shop that blocks bots cannot be checked: its card is shown only if the exact URL appeared in
+//    the search tool's own results (`sourceUrls`), and then marked as unchecked.
+// `fetcher` is injectable for tests. `stats` receives counters and the reasons for each drop.
+export async function verifyCandidates(candidates, { sourceUrls = new Set(), fetcher = fetchPreview } = {}, stats = {}) {
+  const drop = (c, reason) => { (stats.dropped ||= []).push(`${reason}: ${c.url}`.slice(0, 160)); stats[reason] = (stats[reason] || 0) + 1; return null; };
+  const results = await Promise.all(candidates.map(async (c) => {
+    const fromSearch = sourceUrls.has(normalizeUrl(c.url));
+    let p;
     try {
-      const p = await fetchPreview(c.url);
-      if (!p.title) { debug.noTitle++; return null; }
-      debug.verified++;
-      return strip({ ...c, url: p.url, title: p.title || c.title, imageUrl: p.image || null, price: p.price || null, currency: p.currency || null, verified: true });
+      p = await fetcher(c.url);
     } catch (e) {
-      if (/answered with (404|410)\b/.test(e.message || '')) { debug.deadLinks++; return null; }
-      // We respect shops that block automatic reading and do not disguise the bot. A price the
-      // search showed is kept but flagged as approximate; there is no photo.
-      debug.unreadable++;
-      return strip({ ...c, imageUrl: null, price: c.seenPrice, currency: c.seenPrice ? c.seenCurrency || 'UAH' : null, priceApprox: !!c.seenPrice, verified: false });
+      const msg = e.message || '';
+      if (/does not allow automatic reading/.test(msg)) {
+        if (!fromSearch) return drop(c, 'blocked');
+        stats.uncheckedKept = (stats.uncheckedKept || 0) + 1;
+        return { ...strip(c), imageUrl: null, price: c.seenPrice, currency: c.seenPrice ? c.seenCurrency || 'UAH' : null, priceApprox: !!c.seenPrice, verified: false };
+      }
+      return drop(c, 'unreachable'); // 404/410, unknown domain, no answer, 5xx
     }
+    if (!p.title) return drop(c, 'noTitle');
+    const asked = new URL(c.url), got = new URL(p.url || c.url);
+    if (got.pathname.replace(/\/+$/, '') === '' && asked.pathname.replace(/\/+$/, '') !== '') return drop(c, 'redirectedHome');
+    if (!p.isProduct && !fromSearch) return drop(c, 'notProduct');
+    const agree = titlesAgree(c.title, p.title);
+    if (!agree && !fromSearch) return drop(c, 'titleMismatch');
+    stats.verified = (stats.verified || 0) + 1;
+    const host = hostOf(p.url || c.url);
+    return {
+      ...strip(c),
+      url: p.url || c.url,
+      title: p.title,
+      why: agree ? c.why : '',
+      imageUrl: p.image || null,
+      price: p.price || null,
+      currency: p.currency || (p.price && /\.ua$/.test(host || '') ? 'UAH' : null),
+      verified: true,
+    };
   }));
-  return checked.filter(Boolean);
+  return results.filter(Boolean);
 }
 
-// `debug` (optional) is filled with counters so an admin can see where results disappear.
+// ---------- search pipeline ----------
+
+const TARGET = 6;               // stop early when this many cards survived
+const BUDGET_MS = 52_000;       // the whole search must finish well inside the 60 s edge limit
+const SECOND_ROUND_BEFORE_MS = 20_000;
+
+// `debug` (optional) is filled with counters so an admin can see where candidates disappear.
 export async function searchOffers(params, partners, debug = {}) {
   if (process.env.DISCOVER_MOCK === 'true') return mockOffers(params);
-  const { text, citations, shape } = await converseWithWebSearch({
-    system: SYSTEM_PROMPT,
-    prompt: buildPrompt(params, partners),
-  });
-  const candidates = parseCandidates(text);
-  Object.assign(debug, {
-    textLength: text.length, textHead: text.slice(0, 500), candidates: candidates.length,
-    citations: citations.length, citedSample: citations.slice(0, 6).map((c) => c.url),
-    notCited: [], noTitle: 0, verified: 0, unreadable: 0, deadLinks: 0, shape,
-  });
-  const offers = await verify(candidates, citations, debug);
+  const started = Date.now();
+  const kept = new Map(); // url -> offer
+  const failed = [];
+  debug.rounds = [];
+
+  for (let round = 0; round < 2; round++) {
+    const elapsed = Date.now() - started;
+    if (round > 0 && (kept.size >= TARGET || elapsed > SECOND_ROUND_BEFORE_MS)) break;
+    let res;
+    try {
+      res = await converseWithWebSearch({
+        system: systemPrompt(),
+        prompt: buildPrompt(params, partners, { failed }),
+        timeoutMs: round === 0 ? 45_000 : Math.max(10_000, BUDGET_MS - elapsed - 9_000),
+      });
+    } catch (e) {
+      if (round === 0) throw e; // nothing yet: let the caller report the real error
+      debug.rounds.push({ error: e.message });
+      break;
+    }
+    const sourceUrls = new Set(res.sourceUrls.map(normalizeUrl).filter(Boolean));
+    const candidates = parseCandidates(res.text).filter((c) => !kept.has(c.url) && !failed.includes(c.url)).slice(0, 15);
+    const stats = {};
+    const offers = await verifyCandidates(candidates, { sourceUrls }, stats);
+    for (const o of offers) kept.set(o.url, o);
+    const keptUrls = new Set(offers.map((o) => o.url));
+    candidates.forEach((c) => { if (!keptUrls.has(c.url)) failed.push(c.url); });
+    debug.rounds.push({
+      textHead: round === 0 ? res.text.slice(0, 400) : undefined,
+      candidates: candidates.length, sourceUrls: sourceUrls.size, searches: res.searches, shape: res.shape, ...stats, kept: offers.length,
+    });
+  }
+
+  const offers = [...kept.values()];
   debug.kept = offers.length;
-  console.log('discover:', JSON.stringify({ text: text.length, candidates: candidates.length, citations: citations.length, citedFilter: debug.useCitations, notCited: debug.notCited.length, verified: debug.verified, unreadable: debug.unreadable, deadLinks: debug.deadLinks, kept: offers.length }));
+  debug.ms = Date.now() - started;
+  console.log('discover:', JSON.stringify({ ms: debug.ms, rounds: debug.rounds.map((r) => ({ candidates: r.candidates, sourceUrls: r.sourceUrls, verified: r.verified || 0, unchecked: r.uncheckedKept || 0, kept: r.kept, dropped: Object.fromEntries(['blocked', 'unreachable', 'noTitle', 'redirectedHome', 'notProduct', 'titleMismatch'].map((k) => [k, r[k] || 0])) })), kept: offers.length }));
   return offers;
 }
 

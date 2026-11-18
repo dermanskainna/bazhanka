@@ -1,21 +1,29 @@
 import pg from 'pg';
+import { rpcQuery } from './dbrpc.js';
 
 // Return DATE columns as plain 'YYYY-MM-DD' strings. By default pg builds a JS Date at local
 // midnight, and toISOString() then shifts the day back by one on servers east of UTC (e.g. Kyiv).
 pg.types.setTypeParser(1082, (v) => v);
 
-const connectionString =process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/bazhanka';
+// DB_MODE=rpc: the AWS "edge" function has no network path to the database and sends queries to the
+// main function instead (see dbrpc.js). Everywhere else (local, tests, the main function) we use pg.
+export const rpcMode = process.env.DB_MODE === 'rpc';
+
+const connectionString = process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/bazhanka';
 const useSsl = process.env.DATABASE_SSL === 'true';
 
-export const pool = new pg.Pool({
+export const pool = rpcMode ? null : new pg.Pool({
   connectionString,
   ssl: useSsl ? { rejectUnauthorized: false } : undefined,
   max: 10,
 });
 
-export const query = (text, params) => pool.query(text, params);
+export const query = rpcMode ? rpcQuery : (text, params) => pool.query(text, params);
 
 export async function tx(fn) {
+  // A transaction needs one connection across several statements; the routes that use tx() are served
+  // by the main function, never by the edge function.
+  if (rpcMode) throw new Error('Transactions are not available in DB_MODE=rpc');
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -160,5 +168,6 @@ CREATE INDEX IF NOT EXISTS idx_views_list ON list_views(wishlist_id);
 `;
 
 export async function migrate() {
+  if (rpcMode) return; // the main function owns the schema
   await pool.query(SCHEMA);
 }
