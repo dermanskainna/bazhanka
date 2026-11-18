@@ -55,7 +55,7 @@ export function signRequest({ method = 'POST', host, path, region, service = 'be
   };
 }
 
-// Calls Converse with Amazon Nova web grounding enabled. Returns { text, citations: [{url, domain}], shape }.
+// Calls Converse with Amazon Nova web grounding enabled. Returns { text, citations, sourceUrls, searches, shape }.
 export async function converseWithWebSearch({ system, prompt, maxTokens = 3000, timeoutMs = 45_000 }) {
   if (!hasAwsCredentials()) throw new Error('AWS credentials are not available');
   const { region, modelId } = bedrockConfig();
@@ -93,13 +93,36 @@ export async function converseWithWebSearch({ system, prompt, maxTokens = 3000, 
   }
 
   let text = '';
-  for (const block of data.output?.message?.content || []) if (block.text) text += block.text;
+  const content = data.output?.message?.content || [];
+  for (const block of content) if (block.text) text += block.text;
+  const tools = collectToolInfo(content);
   return {
     text,
     citations: collectCitations(data.output),
-    // Shape info for diagnostics only (no content).
-    shape: { stopReason: data.stopReason, blocks: (data.output?.message?.content || []).map((b) => Object.keys(b).join('+')) },
+    sourceUrls: tools.urls,   // URLs that appear in the search tool's own results
+    searches: tools.queries,  // what the model actually searched for
+    // Shape info for diagnostics only.
+    shape: { stopReason: data.stopReason, blocks: content.map((b) => Object.keys(b).join('+')), toolResultSample: tools.sample },
   };
+}
+
+// Reads toolUse (the search queries) and toolResult (the retrieved pages) blocks of a response.
+export function collectToolInfo(content) {
+  const urls = new Set();
+  const queries = [];
+  let sample = null;
+  for (const b of content || []) {
+    if (b.toolUse?.input) {
+      const q = b.toolUse.input.query || b.toolUse.input.q || (typeof b.toolUse.input === 'string' ? b.toolUse.input : null);
+      if (q) queries.push(String(q).slice(0, 160));
+    }
+    if (b.toolResult) {
+      const raw = JSON.stringify(b.toolResult);
+      sample ||= raw.slice(0, 300);
+      for (const m of raw.match(/https?:\/\/[^\s"'<>\\)\]]+/g) || []) urls.add(m.replace(/[.,;]+$/, ''));
+    }
+  }
+  return { urls: [...urls], queries, sample };
 }
 
 // Finds every web source in a response, wherever the model put it (citationsContent as an array or
