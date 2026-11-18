@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, money, niceDate } from '../api.js';
 import { useSession } from '../session.jsx';
-import { GiftIcon, LockIcon, AsteriskIcon, LinkIcon, CheckIcon } from '../icons.jsx';
+import { GiftIcon, LockIcon, AsteriskIcon, LinkIcon, CheckIcon, TrashIcon } from '../icons.jsx';
 
 // Set by /add once the "+ Bazhanka" browser button has been used in this browser.
 // Shown when the server could not read the shop page. Not reading a page is normal (many shops don't
@@ -101,7 +101,7 @@ function GiftCard({ n, item, taken, stamp, onEdit, children }) {
 function OwnerView({ data, reload }) {
   const w = data.wishlist;
   const navigate = useNavigate();
-  const [editing, setEditing] = useState(null); // item id or 'new'
+  const [editing, setEditing] = useState(null); // 'new' while the add form is open; editing has its own page
   const shareUrl = `${window.location.origin}/l/${w.slug}`;
   const [copied, setCopied] = useState(false);
 
@@ -149,10 +149,8 @@ function OwnerView({ data, reload }) {
       )}
 
       <div className="guide">
-        {data.items.map((it, idx) => editing === it.id ? (
-          <ItemForm key={it.id} item={it} onDone={() => { setEditing(null); reload(); }} onCancel={() => setEditing(null)} />
-        ) : (
-          <GiftCard key={it.id} n={idx + 1} item={it} onEdit={() => setEditing(it.id)}>
+        {data.items.map((it, idx) => (
+          <GiftCard key={it.id} n={idx + 1} item={it} onEdit={() => navigate(`/l/${w.slug}/edit/${it.id}`)}>
             <div className="row">
               {it.url && <a href={it.url} target="_blank" rel="noreferrer">Open in shop ↗</a>}
               <button className="link danger" onClick={() => removeItem(it.id)}>Remove</button>
@@ -160,7 +158,10 @@ function OwnerView({ data, reload }) {
           </GiftCard>
         ))}
       </div>
-      <p className="center"><button className="link danger" onClick={removeList}>Delete this wishlist</button></p>
+      <div className="danger-zone">
+        <button className="btn danger-btn" onClick={removeList}><TrashIcon size={16} /> Delete this wishlist</button>
+        <small className="muted">Removes the list and all its gifts for you and your friends.</small>
+      </div>
     </>
   );
 }
