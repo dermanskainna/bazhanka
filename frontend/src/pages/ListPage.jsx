@@ -2,20 +2,35 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, money, niceDate } from '../api.js';
 import { isOwnPhoto, uploadPhoto } from '../photo.js';
-import { onListChanged } from '../sync.js';
+import { onListChanged, sameProduct } from '../sync.js';
+import BookmarkletButton from '../BookmarkletButton.jsx';
+import BarShortcut from '../BarShortcut.jsx';
 import { useSession } from '../session.jsx';
 import { GiftIcon, LockIcon, AsteriskIcon, LinkIcon, CheckIcon, TrashIcon } from '../icons.jsx';
 
 // Set by /add once the "+ Bazhanka" browser button has been used in this browser.
 // Shown when the server could not read the shop page. Not reading a page is normal (many shops don't
 // allow it), so this is a friendly next step, not an error.
+// The button can be set up right here (no extra tab): it is draggable from this panel too.
 function ManualHelp() {
+  const [open, setOpen] = useState(false);
   return (
     <div className="manual-help" role="status">
       <span className="manual-help-icon"><CheckIcon size={16} /></span>
       <div>
         <p className="manual-help-title"><span className="script">Link added!</span> Now give it a name and a price.</p>
-        <p className="manual-help-tip"><span className="tip-tag">Tip</span> the <Link to="/button" target="_blank">+ Bazhanka button</Link> can fill this in for you.</p>
+        <p className="manual-help-tip">
+          <span className="tip-tag">Tip</span> the{' '}
+          <button type="button" className="tip-link" aria-expanded={open} onClick={() => setOpen((o) => !o)}>+ Bazhanka button</button>{' '}
+          can fill this in for you.
+        </p>
+        {open && (
+          <ol className="tip-steps">
+            <li>Show the bookmarks bar: <BarShortcut /></li>
+            <li>Drag this onto it: <BookmarkletButton /></li>
+            <li>Go back to the product in the shop and press it — the gift lands in this list, and this form closes</li>
+          </ol>
+        )}
       </div>
     </div>
   );
@@ -106,6 +121,12 @@ function OwnerView({ data, reload }) {
   const w = data.wishlist;
   const navigate = useNavigate();
   const [editing, setEditing] = useState(null); // 'new' while the add form is open; editing has its own page
+  const newItemUrl = useRef('');
+  // The gift pasted here could not be read, so it was added with the + Bazhanka button instead: this
+  // half-filled form is no longer needed (the list itself refreshes in ListPage).
+  useEffect(() => onListChanged((msg) => {
+    if (msg?.addedUrl && sameProduct(msg.addedUrl, newItemUrl.current)) setEditing(null);
+  }, w.slug), [w.slug]);
   const shareUrl = `${window.location.origin}/l/${w.slug}`;
   const [copied, setCopied] = useState(false);
 
@@ -145,7 +166,8 @@ function OwnerView({ data, reload }) {
       </div>
 
       {editing === 'new' && (
-        <ItemForm wishlistId={w.id} onDone={() => { setEditing(null); reload(); }} onCancel={() => setEditing(null)} />
+        <ItemForm wishlistId={w.id} onUrlChange={(u) => { newItemUrl.current = u; }}
+          onDone={() => { setEditing(null); reload(); }} onCancel={() => setEditing(null)} />
       )}
 
       {data.items.length === 0 && editing !== 'new' && (
@@ -171,11 +193,12 @@ function OwnerView({ data, reload }) {
 }
 
 // `initial` prefills a new item (used by the "+ Bazhanka" browser button page, /add).
-export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
+export function ItemForm({ wishlistId, item, initial, onDone, onCancel, onUrlChange }) {
   const [f, setF] = useState(item ? { ...emptyItem, ...item, price: item.price ?? '', imageUrl: item.imageUrl || '', url: item.url || '', note: item.note || '' } : { ...emptyItem, ...initial });
   // '' | loading | ok | button | manual (shop not readable, or read but without a title) | missing (404) | bad (not a usable link)
   const [status, setStatus] = useState(initial?.title ? 'button' : '');
   const titleRef = useRef(null);
+  useEffect(() => { onUrlChange?.(f.url); }, [f.url, onUrlChange]);
   const [error, setError] = useState('');
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const [photo, setPhoto] = useState({ busy: false, error: '' });

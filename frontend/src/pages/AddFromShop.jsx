@@ -108,7 +108,7 @@ export default function AddFromShop() {
         onDone={(f) => {
           try { localStorage.setItem(LAST_LIST, listId); } catch { /* private mode */ }
           setDone({ title: f.title, list: chosen });
-          notifyListChanged(chosen.slug);
+          notifyListChanged(chosen.slug, f.url);
         }}
         onCancel={() => (inPopup ? window.close() : window.history.back())}
       />

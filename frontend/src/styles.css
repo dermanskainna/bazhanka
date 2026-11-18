@@ -383,3 +383,7 @@ details.meta-text p { margin: 8px 0 0; }
 .label-row .label-note { margin-left: 4px; }
 /* Page intros are read first: a bit larger than helper lines */
 .lead.meta-text, .meta-text.intro-text { font-size: .9rem; }
+/* Inline set-up of the + Bazhanka button inside the "Link added" hint */
+.tip-link { all: unset; cursor: pointer; color: var(--forest); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.tip-steps { margin: 10px 0 2px; padding-left: 1.3em; font-family: var(--mono); font-size: .78rem; color: #3d5a52; display: grid; gap: 8px; }
+.tip-steps .bookmarklet { padding: 6px 12px; font-size: .8rem; vertical-align: middle; }

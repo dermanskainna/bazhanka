@@ -3,15 +3,9 @@ import { Link } from 'react-router-dom';
 import BookmarkletButton from '../BookmarkletButton.jsx';
 import { bookmarkletCode } from '../bookmarklet.js';
 import { useSession } from '../session.jsx';
+import BarShortcut, { isMac } from '../BarShortcut.jsx';
 
 export const isMobile = (ua = navigator.userAgent) => /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
-const isMac = typeof navigator !== 'undefined' && (/Mac/i.test(navigator.platform || '') || /Macintosh|Mac OS X/i.test(navigator.userAgent));
-
-// The same shortcut shows the bookmarks bar in Chrome, Edge, Firefox, Opera and (as the Favorites bar) Safari.
-const Keys = ({ win, mac }) => (
-  <>{(isMac ? mac : win).map((k, i) => <span key={k}>{i > 0 && '+'}<kbd>{k}</kbd></span>)}</>
-);
-
 function CopyCode() {
   const [state, setState] = useState('');
   const copy = async () => {
@@ -54,7 +48,7 @@ export default function AddButton() {
       <div className="card stack">
         <h3>1. Show the bookmarks bar</h3>
         <p className="meta-text">
-          Press <Keys win={['Ctrl', 'Shift', 'B']} mac={['⌘', 'Shift', 'B']} /> if you don’t see it under the address bar
+          Press <BarShortcut /> if you don’t see it under the address bar
           {isMac && ' (in Safari it’s called the Favorites bar)'}
         </p>
 
