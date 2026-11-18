@@ -45,10 +45,9 @@ export default function App() {
           {user ? (
             <>
               <NavLink to="/dashboard">My lists</NavLink>
-              <NavLink to="/ideas">Gift ideas</NavLink>
               <NavLink to="/santa">Secret Santa</NavLink>
               {user.isAdmin && <NavLink to="/admin">Stats</NavLink>}
-              <button className="link" onClick={logout}>Sign out</button>
+              <button className="nav-signout" onClick={logout}>Sign out</button>
             </>
           ) : user === null ? (
             <>
