@@ -89,8 +89,8 @@ export default function Dashboard() {
         <div className="card cta">
           <h3>Add from any shop in one click</h3>
           <p className="meta-text">
-            You make a wishlist here with <b>+ New wishlist</b>. The <b>+ Bazhanka</b> button fills it while you shop:
-            add it to your browser once, and one click on any product saves it to your list — photo and price included.
+            Add gifts to your wishlist by hand — or save time with the <b style={{ whiteSpace: 'nowrap' }}>+ Bazhanka</b> button:
+            one click on any product in a shop, and it’s on your list with photo and price.
           </p>
           <Link to="/button" className="btn ghost">Get the button</Link>
         </div>
