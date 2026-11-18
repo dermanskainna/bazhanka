@@ -60,8 +60,8 @@ function GiftCard({ n, item, taken, stamp, children }) {
         <ItemMedia item={item} />
         {stamp && <span className="stamp">{stamp}</span>}
       </div>
-      <h3 className="gift-name">#{item.title}</h3>
-      {item.price !== null && <div className="price">{money(item.price, item.currency)}</div>}
+      <h3 className="gift-name" title={item.title}>#{item.title}</h3>
+      <div className="price">{item.price !== null ? money(item.price, item.currency) : '\u00a0'}</div>
       {item.chipIn && <span className="tag">Chip-in gift</span>}
       {item.note && <p className="note">{item.note}</p>}
       <div className="gift-actions">{children}</div>
