@@ -77,9 +77,9 @@ export default function AddButton() {
 
   return (
     <div className="page">
-      <h1>Add from any shop</h1>
+      <h1>The fastest way to save a wish</h1>
       <p>
-        <b>The fastest way to save a wish.</b> See something you love? One click on the + Bazhanka button,
+        See something you love? One click on the + Bazhanka button,
         and it’s in your wishlist — title, photo and price included. No copying, no typing.
       </p>
 

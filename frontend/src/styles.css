@@ -301,9 +301,11 @@ section > .row.between { margin-top: 24px; }
 .bookmarklet { cursor: grab; text-transform: none; letter-spacing: .02em; font-size: .95rem; }
 .bookmarklet:active { cursor: grabbing; }
 kbd { font-family: var(--mono); font-size: .8em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: #fff; }
-.manual-help { background: var(--cream); border-left: 3px solid var(--accent); border-radius: 4px; padding: 10px 14px; font-size: .92rem; }
-.manual-help strong { display: block; margin-bottom: 4px; }
-.manual-help p { margin: 4px 0 0; }
+/* Neutral hint (not an error): soft green, check mark, no accent colour */
+.manual-help { display: flex; gap: 10px; align-items: flex-start; background: #f4f8f3; border: 1px solid var(--sage); border-radius: 10px; padding: 10px 14px; font-size: .92rem; }
+.manual-help-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); margin-top: 1px; }
+.manual-help strong { display: block; font-weight: 600; color: var(--text); }
+.manual-help p { margin: 2px 0 0; color: var(--muted); font-size: .88rem; }
 .field-error { color: var(--accent); }
 .browser-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip-tab { font: inherit; font-size: .85rem; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 12px; cursor: pointer; }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, money, niceDate } from '../api.js';
 import { useSession } from '../session.jsx';
-import { GiftIcon, LockIcon, AsteriskIcon, LinkIcon } from '../icons.jsx';
+import { GiftIcon, LockIcon, AsteriskIcon, LinkIcon, CheckIcon } from '../icons.jsx';
 
 // Set by /add once the "+ Bazhanka" browser button has been used in this browser.
 // Shown when the server could not read the shop page. Not reading a page is normal (many shops don't
@@ -10,8 +10,11 @@ import { GiftIcon, LockIcon, AsteriskIcon, LinkIcon } from '../icons.jsx';
 function ManualHelp() {
   return (
     <div className="manual-help" role="status">
-      <strong>Link added! Now give it a name and a price.</strong>
-      <p>Tip: the <Link to="/button" target="_blank">+ Bazhanka button</Link> can fill this in for you.</p>
+      <span className="manual-help-icon"><CheckIcon size={16} /></span>
+      <div>
+        <strong>Link added! Now give it a name and a price.</strong>
+        <p>Tip: the <Link to="/button" target="_blank">+ Bazhanka button</Link> can fill this in for you.</p>
+      </div>
     </div>
   );
 }
