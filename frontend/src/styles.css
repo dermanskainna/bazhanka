@@ -341,3 +341,11 @@ details summary { cursor: pointer; color: var(--accent); }
 .danger-zone { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 40px; padding-top: 24px; border-top: 1.5px dashed var(--line); text-align: center; }
 .btn.danger-btn { background: transparent; color: var(--accent); border: 2px solid var(--accent); border-radius: 3px 5px 2px 6px / 5px 2px 6px 3px; }
 .btn.danger-btn:hover { background: var(--accent); color: #fff; }
+
+/* Own photo upload in the gift form */
+.photo-field { display: flex; flex-direction: column; gap: 8px; }
+.field-label { font-family: var(--mono); font-size: .74rem; letter-spacing: .07em; text-transform: uppercase; color: #5b4f49; }
+.upload-btn { position: relative; cursor: pointer; }
+.upload-btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.upload-btn.busy { opacity: .6; cursor: progress; }
+.upload-btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }

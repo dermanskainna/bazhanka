@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, money, niceDate } from '../api.js';
+import { isOwnPhoto, uploadPhoto } from '../photo.js';
 import { useSession } from '../session.jsx';
 import { GiftIcon, LockIcon, AsteriskIcon, LinkIcon, CheckIcon, TrashIcon } from '../icons.jsx';
 
@@ -174,6 +175,20 @@ export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
   const titleRef = useRef(null);
   const [error, setError] = useState('');
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
+  const [photo, setPhoto] = useState({ busy: false, error: '' });
+  const pickPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // choosing the same file again should work too
+    if (!file) return;
+    setPhoto({ busy: true, error: '' });
+    try {
+      const url = await uploadPhoto(file);
+      setF((cur) => ({ ...cur, imageUrl: url }));
+      setPhoto({ busy: false, error: '' });
+    } catch (err) {
+      setPhoto({ busy: false, error: err.message });
+    }
+  };
 
   const fetchPreview = async (url) => {
     if (!/^https?:\/\//i.test(url)) return;
@@ -235,7 +250,22 @@ export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
           <select value={f.currency} onChange={set('currency')}>{['UAH', 'EUR', 'USD', 'PLN', 'GBP'].map((c) => <option key={c}>{c}</option>)}</select>
         </label>
       </div>
-      <label>Photo link (optional)<input type="url" value={f.imageUrl} onChange={set('imageUrl')} /></label>
+      <div className="photo-field">
+        <span className="field-label">Photo (optional)</span>
+        <div className="row">
+          <label className={`btn ghost small upload-btn ${photo.busy ? 'busy' : ''}`}>
+            <input type="file" accept="image/*" onChange={pickPhoto} disabled={photo.busy} />
+            {photo.busy ? 'Uploading…' : isOwnPhoto(f.imageUrl) ? 'Choose another photo' : f.imageUrl ? 'Use my own photo instead' : 'Upload my own photo'}
+          </label>
+          {f.imageUrl && !photo.busy && <button type="button" className="link danger" onClick={() => setF({ ...f, imageUrl: '' })}>Remove photo</button>}
+        </div>
+        {photo.error && <small className="field-error">{photo.error}</small>}
+        {isOwnPhoto(f.imageUrl) ? (
+          <small className="muted">Your own photo is used for this gift.</small>
+        ) : (
+          <input type="url" aria-label="Photo link" value={f.imageUrl} onChange={set('imageUrl')} placeholder="…or paste a link to a picture" />
+        )}
+      </div>
       <label>Note for friends (optional)<textarea rows={2} value={f.note} onChange={set('note')} placeholder="Size M, any colour except yellow" /></label>
       <label className="check"><input type="checkbox" checked={f.chipIn} onChange={set('chipIn')} /> Let several friends chip in on this gift</label>
       {status !== 'bad' && error && <p className="error">{error}</p>}

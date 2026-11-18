@@ -11,6 +11,7 @@ import wishlistRoutes from './routes/wishlists.js';
 import santaRoutes from './routes/santa.js';
 import miscRoutes from './routes/misc.js';
 import discoverRoutes from './routes/discover.js';
+import photoRoutes from './routes/photos.js';
 
 const app = express();
 app.set('trust proxy', 1); // behind Render/Fly HTTPS proxy
@@ -38,6 +39,7 @@ app.get('/healthz', async (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/santa', santaRoutes);
+app.use('/api', photoRoutes);
 app.use('/api', discoverRoutes);
 app.use('/api', wishlistRoutes);
 app.use('/api', miscRoutes);

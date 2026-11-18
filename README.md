@@ -19,6 +19,7 @@ Team: Inna Dermanska, Bohdana Skochynska, Ksenia Nimas (UCU).
 | Sign up / sign in (email + password, httpOnly session cookie) | `/signup`, `/signin` |
 | Create wishlists for an occasion and share them by link (copy or Telegram) | `/dashboard`, `/l/<code>` |
 | Add an item by pasting a shop link: title, photo and price are filled in automatically when the shop allows it (JSON-LD / Open Graph); otherwise fill the item in by hand | owner view of a list |
+| Own photo for a gift: upload from your computer or phone; the browser shrinks it to 1200 px (~100–300 KB) and it is stored in the database, no extra storage service | gift form |
 | Secret reservation: guests see "already reserved", the owner sees nothing | guest view of a list |
 | Chip in: several guests add amounts to one gift, with a progress bar | items marked "chip-in" |
 | Add from any shop with the “+ Bazhanka” browser button (bookmarklet), also where a pasted link can’t be read | `/button`, `/add` |
