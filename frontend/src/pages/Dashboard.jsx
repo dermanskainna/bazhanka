@@ -80,7 +80,7 @@ export default function Dashboard() {
       <section>
         <div className="card cta">
           <h3>Don’t know what to wish for?</h3>
-          <p className="meta-text">Tell us what you like and get ideas from real shops — add them to your list in one tap.</p>
+          <p className="meta-text">Tell us what you like and get ideas from real shops — add them to your list in one tap</p>
           <Link to="/ideas" className="btn ghost">Get gift ideas</Link>
         </div>
       </section>
@@ -90,7 +90,7 @@ export default function Dashboard() {
           <h3>Add from any shop in one click</h3>
           <p className="meta-text">
             Add gifts to your wishlist by hand — or save time with the <b style={{ whiteSpace: 'nowrap' }}>+ Bazhanka</b> button:
-            one click on any product in a shop, and it’s on your list with photo and price.
+            one click on any product in a shop, and it’s on your list with photo and price
           </p>
           <Link to="/button" className="btn ghost">Get the button</Link>
         </div>
@@ -99,7 +99,7 @@ export default function Dashboard() {
       <section>
         <h2 className="dash-title">Gifts I’m giving</h2>
         {gifts.length === 0 ? (
-          <p className="meta-text">When you reserve or chip in on a friend’s gift, it shows up here so you don’t forget.</p>
+          <p className="meta-text">When you reserve or chip in on a friend’s gift, it shows up here so you don’t forget</p>
         ) : (
           <div className="stack">
             {gifts.map((g) => (
