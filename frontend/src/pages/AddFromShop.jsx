@@ -5,6 +5,7 @@ import { normCurrency, parsePrice } from '../bookmarklet.js';
 import { ItemForm } from './ListPage.jsx';
 
 const LAST_LIST = 'bz:lastList';
+const AUTO_CLOSE_SECONDS = 6;
 const httpOnly = (v) => (/^https?:\/\//i.test(v || '') ? v : '');
 
 // Landing page of the "+ Bazhanka" button: /add?url=&title=&image=&price=&currency=
@@ -25,6 +26,9 @@ export default function AddFromShop() {
   const [done, setDone] = useState(null);
   const [error, setError] = useState('');
   const [closeFailed, setCloseFailed] = useState(false);
+  // Countdown before the popup closes itself; null = stopped because the person is using the window.
+  const [secondsLeft, setSecondsLeft] = useState(AUTO_CLOSE_SECONDS);
+  const stay = () => setSecondsLeft(null);
   // Opened by the + Bazhanka button as a small window over the shop? Then it closes itself when done.
   const inPopup = !!window.opener;
   const closeWindow = () => {
@@ -36,10 +40,11 @@ export default function AddFromShop() {
   const backToShop = () => window.history.back();
 
   useEffect(() => {
-    if (!done || !inPopup) return undefined;
-    const t = setTimeout(closeWindow, 1300);
+    if (!done || !inPopup || secondsLeft === null) return undefined;
+    if (secondsLeft <= 0) { closeWindow(); return undefined; }
+    const t = setTimeout(() => setSecondsLeft((n) => (n === null ? null : n - 1)), 1000);
     return () => clearTimeout(t);
-  }, [done, inPopup]);
+  }, [done, inPopup, secondsLeft]);
 
   useEffect(() => {
     api('/wishlists').then(({ wishlists }) => {
@@ -70,16 +75,20 @@ export default function AddFromShop() {
 
   if (done) {
     return (
-      <div className="page">
+      // A click or a key press means the person wants to stay: the countdown stops.
+      <div className="page" onPointerDown={inPopup ? stay : undefined} onKeyDown={inPopup ? stay : undefined}>
         <h1>Added ✓</h1>
         <div className="card stack">
           <p>“{done.title}” is now on <b>{done.list.title}</b>.</p>
-          {inPopup && !closeFailed && <p className="muted small">This window closes by itself…</p>}
-          {inPopup && closeFailed && <p className="muted small">You can close this window now.</p>}
           <div className="row">
             <a className="btn" href={`/l/${done.list.slug}`} target={inPopup ? '_blank' : undefined} rel="noreferrer">Open the list</a>
+            {inPopup && <button className="btn ghost" onClick={closeWindow}>Back to the shop</button>}
             {!inPopup && window.history.length > 1 && <button className="btn ghost" onClick={backToShop}>Back to the shop</button>}
           </div>
+          {inPopup && !closeFailed && secondsLeft !== null && (
+            <p className="muted small">This window closes in {secondsLeft} s — click anywhere to keep it open.</p>
+          )}
+          {inPopup && closeFailed && <p className="muted small">You can close this window now.</p>}
         </div>
       </div>
     );
