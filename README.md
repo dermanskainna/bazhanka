@@ -125,8 +125,8 @@ All configuration is via environment variables (see `backend/.env.example`):
 | `DATABASE_SSL` | no | `true` for hosted Postgres reached over the internet (Neon, Supabase) |
 | `JWT_SECRET` | **yes in prod** | secret used to sign session cookies |
 | `ADMIN_EMAILS` | no | comma-separated emails allowed to open `/admin` |
-| `DONATION_URL` | no | link shown in the footer (e.g. a Monobank jar for a volunteer cause) |
-| `DONATION_LABEL` | no | text for that link |
+| `DONATION_URL` | no | Monobank jar to support the project (footer and dashboard); overrides the link in `backend/src/routes/misc.js` |
+| `DONATION_LABEL` | no | text for that link, default “Support Bazhanka” |
 | `PORT` | no | default 3000 |
 
 ## Deploy (HTTPS) — Render, free tier

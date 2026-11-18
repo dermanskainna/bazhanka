@@ -11,7 +11,7 @@ import AddButton from './pages/AddButton.jsx';
 import AddFromShop from './pages/AddFromShop.jsx';
 import EditItem from './pages/EditItem.jsx';
 import Feedback from './Feedback.jsx';
-import { GiftIcon } from './icons.jsx';
+import { GiftIcon, HeartIcon } from './icons.jsx';
 
 function RequireUser({ children }) {
   const { user } = useSession();
@@ -76,7 +76,8 @@ export default function App() {
       </main>
       {config.donationUrl && (
         <footer className="footer">
-          <a href={config.donationUrl} target="_blank" rel="noreferrer">{config.donationLabel}</a>
+          <span>Bazhanka is free and made by three students at UCU</span>
+          <a className="support-link" href={config.donationUrl} target="_blank" rel="noreferrer"><HeartIcon size={15} /> {config.donationLabel}</a>
         </footer>
       )}
       <Feedback />

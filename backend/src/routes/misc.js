@@ -5,10 +5,14 @@ import { ah, HttpError, str } from '../util.js';
 
 const r = Router();
 
+// Support for the project itself (a Monobank jar). DONATION_URL / DONATION_LABEL override the defaults;
+// with no link at all the site shows no support links.
+const SUPPORT_URL = '';
+
 r.get('/config', (_req, res) => {
   res.json({
-    donationUrl: process.env.DONATION_URL || null,
-    donationLabel: process.env.DONATION_LABEL || 'Support a volunteer cause',
+    donationUrl: process.env.DONATION_URL || SUPPORT_URL || null,
+    donationLabel: process.env.DONATION_LABEL || 'Support Bazhanka',
   });
 });
 
