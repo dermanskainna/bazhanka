@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, money, niceDate } from '../api.js';
 import { useSession } from '../session.jsx';
-import { GiftIcon } from '../icons.jsx';
+import { GiftIcon, HeartIcon } from '../icons.jsx';
 import { onListChanged } from '../sync.js';
 
 const OCCASIONS = ['Birthday', 'Christmas', 'St Nicholas Day', 'Graduation', 'New Year', 'Wedding'];
 const OTHER = '__other'; // "Other…": the person types their own occasion
 
 export default function Dashboard() {
-  const { user } = useSession();
+  const { user, config } = useSession();
   const navigate = useNavigate();
   const [lists, setLists] = useState(null);
   const [gifts, setGifts] = useState([]);
@@ -123,6 +123,19 @@ export default function Dashboard() {
           </div>
         )}
       </section>
+
+      {config.donationUrl && (
+        <section>
+          <div className="card cta support-card">
+            <h3>Like Bazhanka?</h3>
+            <p className="meta-text">
+              It’s free and made by three students. If it helped you, you can support the project — it keeps the
+              site running
+            </p>
+            <a className="btn ghost" href={config.donationUrl} target="_blank" rel="noreferrer"><HeartIcon size={15} /> Support on Monobank</a>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

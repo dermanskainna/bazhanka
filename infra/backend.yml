@@ -57,7 +57,7 @@ Parameters:
     Default: ""
   DonationLabel:
     Type: String
-    Default: "Support a volunteer cause"
+    Default: "Support Bazhanka"
   DiscoverEnabled:
     Type: String
     Default: "true"

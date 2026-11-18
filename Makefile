@@ -123,7 +123,7 @@ aws-deploy-backend: aws-push
 				"AdminEmails=$(AWS_ADMIN_EMAILS)" \
 				"SerperApiKey=$(AWS_SERPER_API_KEY)" \
 				"DonationUrl=$(AWS_DONATION_URL)" \
-				"DonationLabel=$(or $(AWS_DONATION_LABEL),Support a volunteer cause)"
+				"DonationLabel=$(or $(AWS_DONATION_LABEL),Support Bazhanka)"
 	@$(MAKE) --no-print-directory aws-url
 
 # Dry run of the backend update: pushes the image, creates a change set WITHOUT applying it and lists
