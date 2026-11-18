@@ -170,7 +170,7 @@ test('serper pipeline: checked shop pages first, Google listings fill the gap', 
   const debug = {};
   const out = await searchSerper({ interests: 'кава', budget: null, currency: 'UAH' }, [], debug, {
     planQueries: async () => [{ q: 'кавомолка', fit: 'direct', for: 'кава' }, { q: 'чай', fit: 'adjacent', for: 'чай' }],
-    webSearch: async (q) => [{ title: 'Кавомолка Hario', url: `https://shop-${encodeURIComponent(q.split(' ')[0])}.com.ua/p/1` }, { title: 'x', url: 'https://www.example.com/p' }, { title: 'Категорія', url: `https://cat-${encodeURIComponent(q.split(' ')[0])}.com.ua/c` }],
+    webSearch: async (q) => [{ title: 'Кавомолка Hario', url: `https://shop-${q.length}.com.ua/p/1` }, { title: 'x', url: 'https://www.example.com/p' }, { title: 'Категорія', url: `https://cat-${q.length}.com.ua/c` }],
     fetcher: async (u) => (u.includes('//cat-') ? { title: 'Категорія', url: u, isProduct: false } : { title: 'Кавомолка Hario', url: u, price: 900, currency: 'UAH', isProduct: true }),
     shoppingSearch: async (q) => [{ title: `${q} Google`, shop: 'Molodo', url: 'https://www.google.com/search?ibp=oshop&q=' + encodeURIComponent(q), price: 500, currency: 'UAH' }],
   });
@@ -186,7 +186,7 @@ test('serper pipeline: every interest is represented, not only the first query',
   const qs = ['свічки', 'малювання', 'чай', 'коти'];
   const out = await searchSerper({ interests: qs.join(', '), budget: null, currency: 'UAH' }, [], {}, {
     planQueries: async () => qs.map((q) => ({ q, fit: 'direct', for: q })),
-    webSearch: async (q) => Array.from({ length: 5 }, (_, i) => ({ title: `${q} ${i}`, url: `https://s${i}-${encodeURIComponent(q.split(' ')[0])}.com.ua/p/${i}/` })),
+    webSearch: async (q) => Array.from({ length: 5 }, (_, i) => ({ title: `${q} ${i}`, url: `https://s${i}-${q.length}.com.ua/p/${i}/` })),
     fetcher: async (u) => ({ title: 'Товар ' + u, url: u, price: 300, currency: 'UAH', isProduct: true }),
     shoppingSearch: async () => [],
   });
