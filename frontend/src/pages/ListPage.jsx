@@ -129,7 +129,7 @@ function OwnerView({ data, reload }) {
       <div className="card share">
         <div>
           <h3 className="share-title"><LinkIcon size={20} /> Share this link with friends</h3>
-          <p className="muted small">Guests see which gifts are taken. You won’t — so the surprise stays a surprise.</p>
+          <p className="meta-text">Guests see which gifts are taken. You won’t — so the surprise stays a surprise</p>
         </div>
         <div className="share-row">
           <input readOnly value={shareUrl} onFocus={(e) => e.target.select()} />
