@@ -12,8 +12,8 @@ function ManualHelp() {
     <div className="manual-help" role="status">
       <span className="manual-help-icon"><CheckIcon size={16} /></span>
       <div>
-        <strong>Link added! Now give it a name and a price.</strong>
-        <p>Tip: the <Link to="/button" target="_blank">+ Bazhanka button</Link> can fill this in for you.</p>
+        <p className="manual-help-title"><span className="script">Link added!</span> Now give it a name and a price.</p>
+        <p className="manual-help-tip"><span className="tip-tag">Tip</span> the <Link to="/button" target="_blank">+ Bazhanka button</Link> can fill this in for you.</p>
       </div>
     </div>
   );

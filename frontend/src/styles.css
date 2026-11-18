@@ -301,11 +301,19 @@ section > .row.between { margin-top: 24px; }
 .bookmarklet { cursor: grab; text-transform: none; letter-spacing: .02em; font-size: .95rem; }
 .bookmarklet:active { cursor: grabbing; }
 kbd { font-family: var(--mono); font-size: .8em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: #fff; }
-/* Neutral hint (not an error): soft green, check mark, no accent colour */
-.manual-help { display: flex; gap: 10px; align-items: flex-start; background: #f4f8f3; border: 1px solid var(--sage); border-radius: 10px; padding: 10px 14px; font-size: .92rem; }
-.manual-help-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); margin-top: 1px; }
-.manual-help strong { display: block; font-weight: 600; color: var(--text); }
-.manual-help p { margin: 2px 0 0; color: var(--muted); font-size: .88rem; }
+/* Neutral hint (not an error), in the site's own hand-made style: sage like the Santa card,
+   wobbly corners like .notice, a Caveat accent and a mono pill like .tag. */
+.manual-help { display: flex; gap: 12px; align-items: flex-start; background: var(--sage); color: var(--forest); padding: 12px 16px;
+  border-radius: 4px 6px 3px 5px / 6px 3px 5px 4px; }
+.manual-help-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%;
+  background: #fff; color: var(--forest); margin-top: 2px; }
+.manual-help p { margin: 0; }
+.manual-help-title { font-size: .95rem; }
+.manual-help-title .script { font-family: "Caveat", cursive; font-size: 1.45rem; font-weight: 700; line-height: 1; margin-right: 4px; }
+.manual-help-tip { margin-top: 4px !important; font-size: .88rem; color: #3d5a52; }
+.manual-help-tip a { color: var(--forest); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.tip-tag { display: inline-block; font-family: var(--mono); font-size: .66rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  background: #fff; color: var(--forest); padding: 1px 8px; border-radius: 99px; margin-right: 4px; vertical-align: 1px; }
 .field-error { color: var(--accent); }
 .browser-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip-tab { font: inherit; font-size: .85rem; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 12px; cursor: pointer; }
