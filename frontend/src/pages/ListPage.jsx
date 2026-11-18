@@ -19,13 +19,13 @@ function ManualHelp() {
       <span className="manual-help-icon"><CheckIcon size={16} /></span>
       <div>
         <p className="manual-help-title"><span className="script">Link added!</span> Now give it a name and a price.</p>
-        <p className="manual-help-tip">
+        <p className="manual-help-tip pointer-only">
           <span className="tip-tag">Tip</span> the{' '}
           <button type="button" className="tip-link" aria-expanded={open} onClick={() => setOpen((o) => !o)}>+ Bazhanka button</button>{' '}
           can fill this in for you.
         </p>
         {open && (
-          <ol className="tip-steps">
+          <ol className="tip-steps pointer-only">
             <li>Show the bookmarks bar: <BarShortcut /></li>
             <li>Drag this onto it: <BookmarkletButton /></li>
             <li>Go back to the product in the shop and press it — the gift lands in this list, and this form closes</li>
@@ -173,7 +173,7 @@ function OwnerView({ data, reload }) {
       )}
 
       {data.items.length === 0 && editing !== 'new' && (
-        <div className="card empty"><p className="meta-text">Your list is empty. Paste a link from Rozetka, Prom, Makeup, Yakaboo or any other shop and we’ll fill in the rest — or add a gift by hand, or with the <b style={{ whiteSpace: 'nowrap' }}>+ Bazhanka</b> button while you shop</p></div>
+        <div className="card empty"><p className="meta-text">Your list is empty. Paste a link from Rozetka, Prom, Makeup, Yakaboo or any other shop and we’ll fill in the rest — or add a gift by hand<span className="pointer-only">, or with the <b style={{ whiteSpace: 'nowrap' }}>+ Bazhanka</b> button while you shop</span></p></div>
       )}
 
       <div className="guide">

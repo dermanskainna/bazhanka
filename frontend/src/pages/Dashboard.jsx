@@ -93,7 +93,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section>
+      <section className="pointer-only">
         <div className="card cta">
           <h3>Add from any shop in one click</h3>
           <p className="meta-text">

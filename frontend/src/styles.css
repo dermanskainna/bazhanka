@@ -406,3 +406,39 @@ details.meta-text p { margin: 8px 0 0; }
 @media (max-width: 640px) { .footer { padding: 14px 16px 72px; } }
 /* The Feedback button (38 px) sits inside the footer band (58 px) when the page is scrolled to the bottom */
 .feedback-fab { bottom: 10px; }
+
+/* ---------- Phones and tablets ---------- */
+/* Things for the "+ Bazhanka" bookmarklet only make sense with a mouse */
+@media (hover: none) and (pointer: coarse) {
+  .pointer-only { display: none !important; }
+}
+/* Gift ideas: the hidden radio inputs were sized against the whole page and pushed it sideways */
+.seg-opt { position: relative; }
+.seg-opt input { width: auto; }
+.footer-links { display: inline-flex; align-items: center; gap: 18px; }
+.footer-feedback { all: unset; cursor: pointer; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text); }
+/* Shown only where the floating button is hidden (narrow screens, see below) */
+.footer .footer-feedback { display: none; }
+@media (max-width: 640px) {
+  /* The floating Feedback button covered fields and text: it lives in the footer instead */
+  .feedback-fab { display: none; }
+  .footer { padding: 14px 16px; }
+  .footer .footer-feedback { display: inline-flex; }
+  /* Compact header in one row, not sticky, so it doesn't eat the screen */
+  .topbar { position: static; padding: 10px 16px; flex-wrap: nowrap; }
+  .topbar nav { gap: 14px; font-size: .68rem; letter-spacing: .05em; flex-wrap: nowrap; }
+  .topbar:has(.nav-signout) .brand-text { display: none; }
+  .nav-signout { padding: 5px 9px; }
+  /* Two gifts per row */
+  .guide { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 14px; padding: 0; }
+  .gift-img { inset: 10px; width: calc(100% - 20px); height: calc(100% - 20px); }
+  .gift-name { font-size: 1.2rem; margin-top: 8px; }
+  .gift-no { font-size: 1.25rem; left: 7px; }
+  .gift-actions .row { gap: 8px 12px; flex-wrap: wrap; font-size: .9rem; }
+  .gift .btn.small { padding: 6px 8px; font-size: .68rem; white-space: normal; }
+  .chip .row { flex-wrap: wrap; }
+  .chip .amount { width: 100%; }
+  /* Share block: link on its own line, Copy and Telegram side by side under it */
+  .share-row { display: grid; grid-template-columns: 1fr 1fr; }
+  .share-row input { grid-column: 1 / -1; }
+}

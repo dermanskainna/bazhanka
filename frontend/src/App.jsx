@@ -40,7 +40,7 @@ export default function App() {
     <div className="shell">
       <header className="topbar">
         {/* The logo always leads to the main page, whether or not you are signed in. */}
-        <Link to="/" className="brand"><GiftIcon size={20} /> Bazhanka</Link>
+        <Link to="/" className="brand" aria-label="Bazhanka"><GiftIcon size={20} /> <span className="brand-text">Bazhanka</span></Link>
         <nav>
           {user ? (
             <>
@@ -74,12 +74,15 @@ export default function App() {
           <Route path="*" element={<div className="page"><h1>Page not found</h1><Link to="/">Go home</Link></div>} />
         </Routes>
       </main>
-      {config.donationUrl && (
-        <footer className="footer">
-          <span>© 2026 Bazhanka</span>
-          <a className="support-link" href={config.donationUrl} target="_blank" rel="noreferrer"><HeartIcon size={15} /> {config.donationLabel}</a>
-        </footer>
-      )}
+      <footer className="footer">
+        <span>© 2026 Bazhanka</span>
+        <span className="footer-links">
+          <button type="button" className="footer-feedback" onClick={() => window.dispatchEvent(new Event('bz:open-feedback'))}>Feedback</button>
+          {config.donationUrl && (
+            <a className="support-link" href={config.donationUrl} target="_blank" rel="noreferrer"><HeartIcon size={15} /> {config.donationLabel}</a>
+          )}
+        </span>
+      </footer>
       <Feedback />
     </div>
   );

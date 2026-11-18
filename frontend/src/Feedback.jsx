@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from './api.js';
 
@@ -8,6 +8,12 @@ export default function Feedback() {
   const [rating, setRating] = useState(0);
   const [state, setState] = useState('idle');
   const loc = useLocation();
+  // On phones the floating button is hidden (it covered the page); the footer has a "Feedback" button instead.
+  useEffect(() => {
+    const show = () => { setOpen(true); setState('idle'); };
+    window.addEventListener('bz:open-feedback', show);
+    return () => window.removeEventListener('bz:open-feedback', show);
+  }, []);
 
   const send = async (e) => {
     e.preventDefault();
