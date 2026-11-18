@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { normCurrency, parsePrice } from '../bookmarklet.js';
 import { ItemForm } from './ListPage.jsx';
-import { notifyListChanged } from '../sync.js';
+import { notifyListChanged, oneAddWindow } from '../sync.js';
 
 const LAST_LIST = 'bz:lastList';
 const httpOnly = (v) => (/^https?:\/\//i.test(v || '') ? v : '');
@@ -34,6 +34,11 @@ export default function AddFromShop() {
     // If the browser refused, the page is still here a moment later.
     setTimeout(() => setCloseFailed(true), 400);
   };
+  // Keep a single + Bazhanka window: an older one whose gift is already added closes when a new one opens.
+  const doneRef = useRef(false);
+  doneRef.current = !!done;
+  useEffect(() => (inPopup ? oneAddWindow(() => doneRef.current) : undefined), [inPopup]);
+
   // Popup blocked, so the button opened /add in the shop's own tab: go back to the product.
   const backToShop = () => window.history.back();
 

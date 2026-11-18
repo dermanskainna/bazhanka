@@ -22,3 +22,18 @@ export function onListChanged(refresh, slug) {
   document.addEventListener('visibilitychange', onVisible);
   return () => { ch?.close(); document.removeEventListener('visibilitychange', onVisible); };
 }
+
+// Only one "+ Bazhanka" window at a time. Browsers reuse the named window only when the button is
+// pressed in the same shop tab; from another tab (or when Firefox opens it as a tab) a second one
+// appears. A newly opened one announces itself, and older ones close if their gift is already added
+// (a form someone is still filling in is left alone).
+export function oneAddWindow(isDone) {
+  let ch;
+  try { ch = new BroadcastChannel(`${NAME}-add`); } catch { return () => {}; }
+  const me = Math.random().toString(36).slice(2);
+  ch.onmessage = (e) => {
+    if (e.data?.type === 'add-window-opened' && e.data.id !== me && isDone()) window.close();
+  };
+  ch.postMessage({ type: 'add-window-opened', id: me });
+  return () => ch.close();
+}
