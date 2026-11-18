@@ -6,7 +6,7 @@ import { ItemForm } from './ListPage.jsx';
 import { notifyListChanged } from '../sync.js';
 
 const LAST_LIST = 'bz:lastList';
-const AUTO_CLOSE_SECONDS = 6;
+const AUTO_CLOSE_SECONDS = 10; // long enough to read it and decide on "Open the list"
 const httpOnly = (v) => (/^https?:\/\//i.test(v || '') ? v : '');
 
 // Landing page of the "+ Bazhanka" button: /add?url=&title=&image=&price=&currency=
