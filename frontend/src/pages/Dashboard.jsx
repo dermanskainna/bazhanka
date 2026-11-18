@@ -5,7 +5,8 @@ import { useSession } from '../session.jsx';
 import { GiftIcon } from '../icons.jsx';
 import { onListChanged } from '../sync.js';
 
-const OCCASIONS = ['Birthday', 'Christmas', 'St Nicholas Day', 'Graduation', 'New Year', 'Wedding', 'Just because'];
+const OCCASIONS = ['Birthday', 'Christmas', 'St Nicholas Day', 'Graduation', 'New Year', 'Wedding'];
+const OTHER = '__other'; // "Other…": the person types their own occasion
 
 export default function Dashboard() {
   const { user } = useSession();
@@ -14,6 +15,7 @@ export default function Dashboard() {
   const [gifts, setGifts] = useState([]);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ title: '', occasion: 'Birthday', eventDate: '' });
+  const [customOccasion, setCustomOccasion] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -28,7 +30,8 @@ export default function Dashboard() {
   const create = async (e) => {
     e.preventDefault();
     try {
-      const { wishlist } = await api('/wishlists', { method: 'POST', body: form });
+      const occasion = form.occasion === OTHER ? customOccasion.trim() : form.occasion;
+      const { wishlist } = await api('/wishlists', { method: 'POST', body: { ...form, occasion } });
       navigate(`/l/${wishlist.slug}`);
     } catch (err) {
       setError(err.message);
@@ -51,7 +54,12 @@ export default function Dashboard() {
               <label>Occasion
                 <select value={form.occasion} onChange={(e) => setForm({ ...form, occasion: e.target.value })}>
                   {OCCASIONS.map((o) => <option key={o}>{o}</option>)}
+                  <option value={OTHER}>Other…</option>
                 </select>
+                {form.occasion === OTHER && (
+                  <input className="custom-occasion" required autoFocus maxLength={40} value={customOccasion}
+                    onChange={(e) => setCustomOccasion(e.target.value)} placeholder="e.g. Housewarming" aria-label="Your occasion" />
+                )}
               </label>
               <label>Date (optional)<input type="date" value={form.eventDate} onChange={(e) => setForm({ ...form, eventDate: e.target.value })} /></label>
             </div>
