@@ -3,7 +3,8 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { parseCandidates, rankOffers, findPartner, cacheKey, buildPrompt, normDomain, baseDomain, verifyCandidates, titlesAgree, isForeignMarketplace, isPlaceholderHost, normalizeUrl } from '../src/discover.js';
+import { parseCandidates, rankOffers, findPartner, cacheKey, buildPrompt, normDomain, baseDomain, verifyCandidates, searchSerper, shoppingToOffers, diversify, parseCandidatesPlan, titlesAgree, isForeignMarketplace, isPlaceholderHost, normalizeUrl } from '../src/discover.js';
+import { parsePriceText } from '../src/serper.js';
 import { signRequest, signingKey, collectCitations, collectToolInfo } from '../src/bedrock.js';
 
 const partners = [
@@ -140,6 +141,39 @@ test('verifyCandidates uses page data and drops fake, dead and mismatched links'
   assert.equal(ok.title, 'Coffee set Hario'); assert.equal(ok.price, 900); assert.equal(ok.imageUrl, 'https://i/1.jpg');
   assert.equal(out.find((o) => !o.verified).priceApprox, false);
   assert.equal(stats.unreachable, 1); assert.equal(stats.redirectedHome, 1); assert.equal(stats.notProduct, 1); assert.equal(stats.titleMismatch, 1); assert.equal(stats.blocked, 1);
+});
+
+test('parsePriceText understands Ukrainian and US formats', () => {
+  assert.deepEqual(parsePriceText('1 299,00 ₴'), { price: 1299, currency: 'UAH' });
+  assert.deepEqual(parsePriceText('899 грн'), { price: 899, currency: 'UAH' });
+  assert.deepEqual(parsePriceText('$1,299.50'), { price: 1299.5, currency: 'USD' });
+  assert.deepEqual(parsePriceText('€12.99'), { price: 12.99, currency: 'EUR' });
+  assert.deepEqual(parsePriceText(''), { price: null, currency: null });
+});
+
+test('shopping listings: real shop links only, budget respected, shops varied', () => {
+  const L = (url, price = 500, title = 'Кавомолка') => ({ title, url, shop: 'S', price, currency: 'UAH', imageUrl: null });
+  const st = {};
+  const o = shoppingToOffers([L('https://www.google.com/aclk?x=1'), L('https://www.etsy.com/listing/1'), L('https://rozetka.com.ua/p1/p1/'), L('https://prom.ua/p2', 5000), L('https://temu.com/x')], 'direct', { budget: 1000, currency: 'UAH' }, st);
+  assert.deepEqual(o.map((x) => x.url), ['https://rozetka.com.ua/p1/p1/', 'https://temu.com/x']);
+  assert.equal(st.googleRedirect, 1); assert.equal(st.overBudget, 1);
+  const many = Array.from({ length: 6 }, (_, i) => ({ ...o[0], url: `https://rozetka.com.ua/p${i}/` }));
+  assert.equal(diversify(many).length, 3);
+  assert.deepEqual(parseCandidatesPlan('```json\n[{"q":"кавомолка","fit":"direct"},{"q":"чай","fit":"adjacent"},{"q":""}]```').map((x) => x.fit), ['direct', 'adjacent']);
+});
+
+test('serper pipeline: Google listings first, page-checked web results as fallback', async () => {
+  const debug = {};
+  const out = await searchSerper({ interests: 'кава', budget: null, currency: 'UAH' }, [], debug, {
+    planQueries: async () => [{ q: 'кавомолка', fit: 'direct' }, { q: 'чай', fit: 'adjacent' }],
+    shoppingSearch: async (q) => [{ title: `${q} 1`, shop: 'Rozetka', url: `https://rozetka.com.ua/${q}/p1/`, price: 700, currency: 'UAH', imageUrl: 'https://i/1.jpg' }],
+    webSearch: async () => [{ title: 'Кавомолка Hario', url: 'https://shop-a.com.ua/p/1' }, { title: 'x', url: 'https://www.example.com/p' }],
+    fetcher: async (u) => ({ title: 'Кавомолка Hario', url: u, price: 900, currency: 'UAH', isProduct: true }),
+  });
+  assert.equal(out.length, 3);
+  assert.equal(out.find((o) => o.fit === 'adjacent').shop, 'Rozetka');
+  assert.ok(out.some((o) => o.url === 'https://shop-a.com.ua/p/1' && o.price === 900));
+  assert.equal(debug.stats.fromShopping, 2);
 });
 
 test('cache key ignores case, order and punctuation; budget is bucketed', () => {

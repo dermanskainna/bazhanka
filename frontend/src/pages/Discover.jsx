@@ -59,7 +59,7 @@ function IdeaCard({ offer, listId, hasLists, onAdded }) {
       <div className="idea-foot">
         <div className="row between idea-meta">
           <span className="price" title={offer.priceApprox ? 'Price seen in search results — please check it in the shop' : undefined}>{offer.price ? `${offer.priceApprox ? '≈ ' : ''}${money(offer.price, offer.currency || 'UAH')}` : ''}</span>
-          <a href={offer.url} target="_blank" rel="noreferrer noopener sponsored" onClick={trackClick} className="small">{host} ↗</a>
+          <a href={offer.url} target="_blank" rel="noreferrer noopener sponsored" onClick={trackClick} className="small">{offer.shop || host} ↗</a>
         </div>
         {state === 'added'
           ? <span className="status mine">Added to your list ✓</span>

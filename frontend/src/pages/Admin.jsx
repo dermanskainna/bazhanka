@@ -14,25 +14,50 @@ function Metric({ label, value, goal, ok }) {
 }
 
 function Check() {
+  const [interests, setInterests] = useState('кава, настільні ігри');
+  const [budget, setBudget] = useState('');
+  const [provider, setProvider] = useState('');
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
-  const run = async () => {
+  const run = async (e) => {
+    e.preventDefault();
     setBusy(true);
-    try { setRes(await api('/admin/discover-check')); } catch (e) { setRes({ ok: false, error: e.message }); } finally { setBusy(false); }
+    try { setRes(await api('/admin/discover-run', { method: 'POST', body: { interests, budget: budget || undefined, provider: provider || undefined } })); }
+    catch (err) { setRes({ ok: false, error: err.message }); }
+    finally { setBusy(false); }
   };
   return (
-    <div className="stack" style={{ marginBottom: 12 }}>
-      <div className="row"><button type="button" className="btn ghost small" disabled={busy} onClick={run}>{busy ? 'Checking…' : 'Test AI search'}</button></div>
+    <form className="stack" style={{ marginBottom: 12 }} onSubmit={run}>
+      <h3>AI search tester <small className="muted">(no daily limit, no cache)</small></h3>
+      <div className="row">
+        <input style={{ flex: 1, minWidth: 200 }} value={interests} onChange={(e) => setInterests(e.target.value)} placeholder="interests" required />
+        <input type="number" style={{ width: 110 }} value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="budget ₴" />
+        <select value={provider} onChange={(e) => setProvider(e.target.value)}>
+          <option value="">default</option>
+          <option value="serper">Google (serper) + AI queries</option>
+          <option value="nova">Nova web grounding</option>
+        </select>
+        <button className="btn small" disabled={busy}>{busy ? 'Searching…' : 'Run search'}</button>
+      </div>
       {res && (
         <p className={res.ok ? 'notice' : 'error'}>
-          {res.ok ? `Works (${res.ms} ms): ${res.offers} offers kept. ` : `Failed${res.kind ? ` [${res.kind}]` : ''}: ${res.error}. `}
-          {res.region && <span className="muted">{res.region} · {res.modelId}</span>}
+          {res.ok ? `Works (${res.ms} ms, ${res.provider}): ${res.offers.length} offers.` : `Failed${res.kind ? ` [${res.kind}]` : ''}: ${res.error}`}
         </p>
       )}
-      {res?.debug?.candidates !== undefined && (
+      {res?.offers?.length > 0 && (
+        <ol className="small">
+          {res.offers.map((o) => (
+            <li key={o.url}>
+              <a href={o.url} target="_blank" rel="noreferrer noopener">{o.title}</a>
+              {' '}<span className="muted">· {o.shop || o.url.split('/')[2]} · {o.price ? `${o.price} ${o.currency || ''}` : 'no price'} · {o.label}{o.verified === false ? ' · unchecked' : ''}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {res?.debug && (
         <pre className="small" style={{ whiteSpace: 'pre-wrap', background: 'var(--cream)', padding: 10, borderRadius: 6 }}>{JSON.stringify(res.debug, null, 2)}</pre>
       )}
-    </div>
+    </form>
   );
 }
 
