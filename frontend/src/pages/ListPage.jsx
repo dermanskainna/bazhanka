@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, money, niceDate } from '../api.js';
 import { isOwnPhoto, uploadPhoto } from '../photo.js';
-import { onListChanged, sameProduct } from '../sync.js';
+import { answerListOpen, onListChanged, sameProduct } from '../sync.js';
 import BookmarkletButton from '../BookmarkletButton.jsx';
 import BarShortcut from '../BarShortcut.jsx';
 import { useSession } from '../session.jsx';
@@ -52,6 +52,8 @@ export default function ListPage() {
   useEffect(() => { if (user !== undefined) load(); }, [load, user]);
   // A gift added from the "+ Bazhanka" window (or in another tab) shows up here without a reload.
   useEffect(() => onListChanged(load, slug), [load, slug]);
+  // Lets the "+ Bazhanka" window know this list is already open here (it then won't open another tab).
+  useEffect(() => (data?.isOwner ? answerListOpen(slug) : undefined), [data?.isOwner, slug]);
 
   if (error) return <div className="page"><h1>Oops</h1><p>{error}</p><Link to="/">Go home</Link></div>;
   if (!data) return <div className="page muted">Loading…</div>;

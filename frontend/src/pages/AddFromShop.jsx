@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { normCurrency, parsePrice } from '../bookmarklet.js';
 import { ItemForm } from './ListPage.jsx';
-import { notifyListChanged, oneAddWindow } from '../sync.js';
+import { isListOpen, notifyListChanged, oneAddWindow } from '../sync.js';
 
 const LAST_LIST = 'bz:lastList';
 const httpOnly = (v) => (/^https?:\/\//i.test(v || '') ? v : '');
@@ -26,6 +26,7 @@ export default function AddFromShop() {
   const [done, setDone] = useState(null);
   const [error, setError] = useState('');
   const [closeFailed, setCloseFailed] = useState(false);
+  const [listOpenElsewhere, setListOpenElsewhere] = useState(null); // null while asking the other tabs
   // Opened by the + Bazhanka button as a small window over the shop? It stays open after adding; the
   // person chooses "Open the list" or "Back to the shop", or simply presses the button on the next gift.
   const inPopup = !!window.opener;
@@ -76,13 +77,18 @@ export default function AddFromShop() {
         <h1>Added ✓</h1>
         <div className="card stack">
           <p>“{done.title}” is now on <b>{done.list.title}</b>.</p>
-          <div className="row">
-            {/* In the small window: open the list in a normal tab and close this window. */}
-            <a className="btn" href={`/l/${done.list.slug}`} target={inPopup ? '_blank' : undefined} rel="noreferrer"
-              onClick={inPopup ? () => setTimeout(closeWindow, 150) : undefined}>Open the list</a>
-            {inPopup && <button className="btn ghost" onClick={closeWindow}>Back to the shop</button>}
+          {inPopup && listOpenElsewhere && (
+            <p className="meta-text">Your list is already open in another tab — it’s updated there</p>
+          )}
+          {listOpenElsewhere !== null && <div className="row">
+            {/* In the small window: open the list in a normal tab and close this window — unless it is open already. */}
+            {!(inPopup && listOpenElsewhere) && (
+              <a className="btn" href={`/l/${done.list.slug}`} target={inPopup ? '_blank' : undefined} rel="noreferrer"
+                onClick={inPopup ? () => setTimeout(closeWindow, 150) : undefined}>Open the list</a>
+            )}
+            {inPopup && <button className={`btn ${listOpenElsewhere ? '' : 'ghost'}`} onClick={closeWindow}>Back to the shop</button>}
             {!inPopup && window.history.length > 1 && <button className="btn ghost" onClick={backToShop}>Back to the shop</button>}
-          </div>
+          </div>}
           {inPopup && closeFailed && <p className="muted small">You can close this window now.</p>}
         </div>
       </div>
@@ -109,6 +115,7 @@ export default function AddFromShop() {
           try { localStorage.setItem(LAST_LIST, listId); } catch { /* private mode */ }
           setDone({ title: f.title, list: chosen });
           notifyListChanged(chosen.slug, f.url);
+          if (inPopup) isListOpen(chosen.slug).then(setListOpenElsewhere); else setListOpenElsewhere(false);
         }}
         onCancel={() => (inPopup ? window.close() : window.history.back())}
       />

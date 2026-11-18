@@ -47,3 +47,24 @@ export function sameProduct(a, b) {
     return host(x) === host(y) && path(x) === path(y);
   } catch { return false; }
 }
+
+// "Is this list already open in another tab?" — so the "+ Bazhanka" window doesn't open a second copy.
+// Browsers don't let a page close or switch to a tab the person opened, so we just avoid adding one.
+export function answerListOpen(slug) {
+  let ch;
+  try { ch = new BroadcastChannel(`${NAME}-who`); } catch { return () => {}; }
+  ch.onmessage = (e) => { if (e.data?.type === 'who-has-list' && e.data.slug === slug) ch.postMessage({ type: 'i-have-list', id: e.data.id }); };
+  return () => ch.close();
+}
+
+export function isListOpen(slug, waitMs = 300) {
+  return new Promise((resolve) => {
+    let ch;
+    try { ch = new BroadcastChannel(`${NAME}-who`); } catch { resolve(false); return; }
+    const id = Math.random().toString(36).slice(2);
+    const done = (v) => { clearTimeout(t); ch.close(); resolve(v); };
+    const t = setTimeout(() => done(false), waitMs);
+    ch.onmessage = (e) => { if (e.data?.type === 'i-have-list' && e.data.id === id) done(true); };
+    ch.postMessage({ type: 'who-has-list', slug, id });
+  });
+}
