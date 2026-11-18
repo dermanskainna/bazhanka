@@ -76,7 +76,7 @@ export default function App() {
       </main>
       {config.donationUrl && (
         <footer className="footer">
-          <span>Bazhanka · wishlists without duplicate gifts</span>
+          <span>© 2026 Bazhanka</span>
           <a className="support-link" href={config.donationUrl} target="_blank" rel="noreferrer"><HeartIcon size={15} /> {config.donationLabel}</a>
         </footer>
       )}
