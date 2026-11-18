@@ -17,12 +17,13 @@ function Check() {
   const [interests, setInterests] = useState('кава, настільні ігри');
   const [budget, setBudget] = useState('');
   const [provider, setProvider] = useState('');
+  const [novelty, setNovelty] = useState('mixed');
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
   const run = async (e) => {
     e.preventDefault();
     setBusy(true);
-    try { setRes(await api('/admin/discover-run', { method: 'POST', body: { interests, budget: budget || undefined, provider: provider || undefined } })); }
+    try { setRes(await api('/admin/discover-run', { method: 'POST', body: { interests, budget: budget || undefined, novelty, provider: provider || undefined } })); }
     catch (err) { setRes({ ok: false, error: err.message }); }
     finally { setBusy(false); }
   };
@@ -36,6 +37,11 @@ function Check() {
           <option value="">default</option>
           <option value="serper">Google (serper) + AI queries</option>
           <option value="nova">Nova web grounding</option>
+        </select>
+        <select value={novelty} onChange={(e) => setNovelty(e.target.value)}>
+          <option value="strict">Only what asked</option>
+          <option value="mixed">Mix</option>
+          <option value="surprise">Surprise me</option>
         </select>
         <button className="btn small" disabled={busy}>{busy ? 'Searching…' : 'Run search'}</button>
       </div>

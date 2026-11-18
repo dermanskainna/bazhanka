@@ -85,10 +85,10 @@ export function titlesAgree(a, b) {
 
 // Version prefix: bump it whenever the pipeline changes so old (possibly wrong) cached results die.
 const CACHE_VERSION = 'v4';
-export function cacheKey({ interests, budget, currency, provider: pv }) {
+export function cacheKey({ interests, budget, budgetMin, currency, provider: pv, novelty, who, occasion }) {
   const norm = String(interests).toLowerCase().replace(/[^\p{L}\p{N}\s,]/gu, ' ').split(/[\s,]+/).filter(Boolean).sort().join(' ');
   const b = budget ? Math.ceil(Number(budget) / 500) * 500 : 0; // coarse buckets so near-identical budgets share a cache entry
-  return crypto.createHash('sha256').update(`${CACHE_VERSION}|${provider(pv)}|${country()}|${norm}|${b}|${currency}`).digest('hex').slice(0, 40);
+  return crypto.createHash('sha256').update(`${CACHE_VERSION}|${provider(pv)}|${country()}|${norm}|${b}|${budgetMin || 0}|${currency}|${novelty || 'mixed'}|${who || ''}|${occasion || ''}`).digest('hex').slice(0, 40);
 }
 
 // ---------- prompt ----------
@@ -182,7 +182,7 @@ export function parseCandidates(text) {
 // relevance group, it never lets an irrelevant partner product beat a direct match. Inside a group,
 // cards checked against the real page come before unchecked ones.
 // Returned offers carry a label: 'match' | 'new', plus `partner` ({ id, name } | null).
-export function rankOffers(offers, partners) {
+export function rankOffers(offers, partners, directPerNew = 3) {
   const decorated = offers.map((o, i) => {
     const partner = findPartner(hostOf(o.url), partners.filter((p) => p.active));
     return { ...o, partner: partner ? { id: partner.id, name: partner.name } : null, _boost: partner ? partner.boost : 0, _i: i };
@@ -195,7 +195,7 @@ export function rankOffers(offers, partners) {
   const adjacent = decorated.filter((o) => o.fit !== 'direct');
   const merged = [];
   while (direct.length || adjacent.length) {
-    for (let k = 0; k < 3 && direct.length; k++) merged.push(direct.shift());
+    for (let k = 0; k < directPerNew && direct.length; k++) merged.push(direct.shift());
     if (adjacent.length) merged.push(adjacent.shift());
     else if (!direct.length) break;
   }
@@ -324,19 +324,43 @@ function mockOffers({ interests }) {
 
 // ---------- Google-based pipeline (serper) ----------
 
-const PLAN_SYSTEM = `You turn a gift request into Google Shopping search queries for online shops in Ukraine.
-Reply with ONLY a JSON array of 4 objects: {"q": string, "fit": "direct" | "adjacent"}.
-- 3 objects "direct": concrete products that clearly match the interests (a product type, optionally with a brand or feature).
-- 1 object "adjacent": a different product category that someone with these interests would still enjoy.
-Write queries in Ukrainian, 2-5 words each, with no shop names, no prices and no quotes.`;
+export const NOVELTY = ['strict', 'mixed', 'surprise'];
+// How many queries of each kind the planner writes: strict = only what was asked, surprise = lots of new ideas.
+const PLAN_SHAPE = { strict: { direct: 6, adjacent: 0 }, mixed: { direct: 5, adjacent: 2 }, surprise: { direct: 3, adjacent: 4 } };
+
+export function planSystem(novelty = 'mixed') {
+  const { direct, adjacent } = PLAN_SHAPE[novelty] || PLAN_SHAPE.mixed;
+  return `You are a gift expert. You turn a description of a person into Google Shopping search queries for online shops in Ukraine.
+First find ALL separate interests in the description (a person can like several things). Then write queries so that EVERY interest is covered.
+Reply with ONLY a JSON array of ${direct + adjacent} objects: {"q": string, "fit": "direct" | "adjacent", "for": string}
+- ${direct} objects "direct": things a person with these interests would want. Give each interest at least one query, and make at least 2 queries COMBINE two interests in one product (for example a candle with a cat figure, a tea set with cat print).
+${adjacent ? `- ${adjacent} objects "adjacent": a NEW discovery - a different product category that fits the person's taste or mood but that they did not mention and probably do not own yet. Do not repeat the interests themselves.` : '- No "adjacent" objects: stay strictly with what the person asked for.'}
+- "q": a concrete product to buy (not an activity), 2-5 words, in Ukrainian, no shop names, no prices, no quotes.
+- "for": which interest(s) the query serves, 1-3 words, in the language of the description.
+Prefer gifts over everyday items; respect the recipient and occasion when they are given.`;
+}
+
+function planPrompt({ interests, who, occasion }) {
+  const lines = [`Description: ${interests}`];
+  if (who) lines.push(`Recipient: ${who}`);
+  if (occasion) lines.push(`Occasion: ${occasion}`);
+  return lines.join('\n');
+}
 
 // Asks the model for product search queries; falls back to the user's own words when the model is unavailable.
-export async function planQueries({ interests }, debug = {}) {
-  const fallback = () => String(interests).split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean).slice(0, 4).map((q) => ({ q, fit: 'direct' }));
+export async function planQueries(params, debug = {}) {
+  const novelty = NOVELTY.includes(params.novelty) ? params.novelty : 'mixed';
+  const fallback = () => {
+    const parts = String(params.interests).split(/[,;\n]+|\s+(?:та|і|й|and)\s+/i).map((x) => x.trim()).filter((x) => x.length > 1).slice(0, 6);
+    const plan = parts.map((q) => ({ q: `${q} подарунок`, fit: 'direct', for: q }));
+    if (parts.length > 1) plan.push({ q: `${parts[0]} ${parts[1]}`, fit: 'direct', for: `${parts[0]} + ${parts[1]}` });
+    return plan;
+  };
   if (!hasAwsCredentials()) { debug.planner = 'fallback: no AWS credentials'; return fallback(); }
   try {
-    const res = await converseWithWebSearch({ system: PLAN_SYSTEM, prompt: `Gift request: ${interests}`, maxTokens: 400, timeoutMs: 15_000, grounding: false });
-    const plan = parseCandidatesPlan(res.text);
+    const res = await converseWithWebSearch({ system: planSystem(novelty), prompt: planPrompt(params), maxTokens: 700, timeoutMs: 20_000, grounding: false });
+    let plan = parseCandidatesPlan(res.text);
+    if (novelty === 'strict') plan = plan.filter((x) => x.fit === 'direct');
     if (plan.length) { debug.planner = 'ai'; return plan; }
     debug.planner = `fallback: unreadable reply ${res.text.slice(0, 120)}`;
   } catch (e) {
@@ -349,12 +373,14 @@ export function parseCandidatesPlan(text) {
   const a = text.indexOf('['), b = text.lastIndexOf(']');
   let arr = [];
   try { arr = JSON.parse(text.slice(a, b + 1)); } catch { arr = []; }
+  const clean = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
   return (Array.isArray(arr) ? arr : [])
-    .map((x) => ({ q: typeof x?.q === 'string' ? x.q.replace(/\s+/g, ' ').trim().slice(0, 80) : '', fit: x?.fit === 'adjacent' ? 'adjacent' : 'direct' }))
-    .filter((x) => x.q.length >= 2).slice(0, 5);
+    .map((x) => ({ q: clean(x?.q, 80), fit: x?.fit === 'adjacent' ? 'adjacent' : 'direct', for: clean(x?.for, 60) }))
+    .filter((x) => x.q.length >= 2).slice(0, 8);
 }
 
 const isGoogleHost = (h) => !!h && /(^|\.)google\.[a-z.]+$/.test(h);
+
 // google.com/goto?url=https%3A%2F%2Fshop... carries the real address only when it is a plain URL.
 export function unwrapGoogle(u) {
   try {
@@ -366,11 +392,12 @@ export function unwrapGoogle(u) {
   } catch { /* not a URL */ }
   return u;
 }
-const MAX_PER_SHOP = 3;
-const MAX_RESULTS = 12;
+const MAX_PER_SHOP = 4;
+const MAX_RESULTS = 15;
+const PER_QUERY = 6;
 
-// Turns raw Google Shopping listings into offers: real merchant links only, relevant budget, varied shops.
-export function shoppingToOffers(listings, fit, { budget, currency }, stats = {}) {
+// Turns raw Google Shopping listings into offers: real merchant links only, price inside the budget.
+export function shoppingToOffers(listings, fit, { budget, budgetMin, currency }, stats = {}, via = null) {
   const out = [];
   for (const l of listings) {
     const url = httpUrl(unwrapGoogle(l.url));
@@ -378,13 +405,25 @@ export function shoppingToOffers(listings, fit, { budget, currency }, stats = {}
     if (!url || !l.title) { stats.badListing = (stats.badListing || 0) + 1; continue; }
     if (isGoogleHost(host)) { stats.googleRedirect = (stats.googleRedirect || 0) + 1; continue; }
     if (isPlaceholderHost(host) || isForeignMarketplace(host)) { stats.blockedShop = (stats.blockedShop || 0) + 1; continue; }
-    if (budget && l.price && (l.currency || 'UAH') === currency && l.price > budget * 1.15) { stats.overBudget = (stats.overBudget || 0) + 1; continue; }
-    out.push({ title: l.title, url, fit, why: '', shop: l.shop || null, imageUrl: l.imageUrl || null, price: l.price || null, currency: l.price ? l.currency || (/\.ua$/.test(host) ? 'UAH' : null) : null, verified: true });
+    if (l.price && (l.currency || 'UAH') === currency) {
+      if (budget && l.price > budget * 1.15) { stats.overBudget = (stats.overBudget || 0) + 1; continue; }
+      if (budgetMin && l.price < budgetMin * 0.85) { stats.underBudget = (stats.underBudget || 0) + 1; continue; }
+    }
+    out.push({ title: l.title, url, fit, why: '', via, shop: l.shop || null, imageUrl: l.imageUrl || null, price: l.price || null, currency: l.price ? l.currency || (/\.ua$/.test(host) ? 'UAH' : null) : null, verified: true });
   }
   return out;
 }
 
-export function diversify(offers) {
+// Takes one result from each query in turn, so that every interest is represented instead of the
+// first query filling the whole page.
+export function roundRobin(groups, perGroup = PER_QUERY) {
+  const lists = groups.map((g) => g.slice(0, perGroup));
+  const out = [];
+  for (let i = 0; i < perGroup; i++) for (const l of lists) if (l[i]) out.push(l[i]);
+  return out;
+}
+
+export function diversify(offers, max = MAX_RESULTS) {
   const perShop = new Map();
   const seen = new Set();
   const out = [];
@@ -396,7 +435,7 @@ export function diversify(offers) {
     seen.add(key);
     perShop.set(shop, (perShop.get(shop) || 0) + 1);
     out.push(o);
-    if (out.length >= MAX_RESULTS) break;
+    if (out.length >= max) break;
   }
   return out;
 }
@@ -407,32 +446,34 @@ export async function searchSerper(params, partners, debug = {}, deps = {}) {
   const fetcher = deps.fetcher || fetchPreview;
   const started = Date.now();
   const gl = country().toLowerCase();
+  const hl = gl === 'ua' ? 'uk' : 'en';
   const plan = await (deps.planQueries || planQueries)(params, debug);
   debug.plan = plan;
   const stats = debug.stats = {};
 
   // 1. Google Shopping: every listing already has title + link + price + photo of the same product.
-  const settled = await Promise.allSettled(plan.map((p) => shopping(p.q, { gl, hl: gl === 'ua' ? 'uk' : 'en' })));
-  let offers = [];
+  const settled = await Promise.allSettled(plan.map((p) => shopping(p.q, { gl, hl })));
+  const groups = [];
   const errors = [];
   settled.forEach((r, i) => {
-    if (r.status === 'rejected') { errors.push(r.reason.message); return; }
+    if (r.status === 'rejected') { errors.push(r.reason.message); groups.push([]); return; }
     stats.listings = (stats.listings || 0) + r.value.length;
     if (i === 0 && r.value[0]) debug.sampleListing = r.value[0];
-    offers.push(...shoppingToOffers(r.value, plan[i].fit, params, stats));
+    groups.push(shoppingToOffers(r.value, plan[i].fit, params, stats, plan[i].for || plan[i].q));
   });
   if (errors.length === plan.length) throw Object.assign(new Error(errors[0]), { kind: 'search' });
   if (errors.length) debug.errors = errors;
-  offers = diversify(offers);
+  debug.perQuery = plan.map((p, i) => `${p.fit}: ${p.q} -> ${groups[i].length}`);
+  let offers = diversify(roundRobin(groups));
   stats.fromShopping = offers.length;
 
   // 2. Too few (or partner shops to include): look inside shops with ordinary results and check the pages.
   const active = partners.filter((p) => p.active).slice(0, 2);
   const direct = plan.find((p) => p.fit === 'direct') || plan[0];
   if ((offers.length < 6 || active.length) && direct) {
-    const queries = [...active.map((p) => ({ q: `site:${p.domain} ${direct.q}`, fit: 'direct' }))];
-    if (offers.length < 6) queries.push({ q: `${direct.q} купити`, fit: 'direct' });
-    const found = await Promise.allSettled(queries.map((x) => web(x.q, { gl, hl: gl === 'ua' ? 'uk' : 'en' })));
+    const queries = active.map((p) => ({ q: `site:${p.domain} ${direct.q}`, fit: 'direct', via: direct.for || direct.q }));
+    if (offers.length < 6) queries.push({ q: `${direct.q} купити`, fit: 'direct', via: direct.for || direct.q });
+    const found = await Promise.allSettled(queries.map((x) => web(x.q, { gl, hl })));
     const candidates = [];
     const urls = new Set();
     found.forEach((r, i) => {
@@ -441,7 +482,7 @@ export async function searchSerper(params, partners, debug = {}, deps = {}) {
         const u = httpUrl(x.url), h = hostOf(u);
         if (!u || isGoogleHost(h) || isPlaceholderHost(h) || isForeignMarketplace(h)) continue;
         urls.add(normalizeUrl(u));
-        candidates.push({ title: x.title, url: u, fit: queries[i].fit, why: '', seenPrice: null, seenCurrency: null });
+        candidates.push({ title: x.title, url: u, fit: queries[i].fit, why: '', via: queries[i].via, seenPrice: null, seenCurrency: null });
       }
     });
     const vstats = debug.verifyStats = {};
@@ -451,6 +492,6 @@ export async function searchSerper(params, partners, debug = {}, deps = {}) {
 
   debug.kept = offers.length;
   debug.ms = Date.now() - started;
-  console.log('discover(serper):', JSON.stringify({ ms: debug.ms, plan: plan.map((p) => p.q), stats, verify: debug.verifyStats, kept: offers.length }));
+  console.log('discover(serper):', JSON.stringify({ ms: debug.ms, plan: plan.map((p) => `${p.fit}:${p.q}`), stats, verify: debug.verifyStats, kept: offers.length }));
   return offers;
 }

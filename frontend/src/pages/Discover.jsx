@@ -3,7 +3,14 @@ import { Link } from 'react-router-dom';
 import { api, money } from '../api.js';
 import { GiftIcon } from '../icons.jsx';
 
-const SUGGESTIONS = ['coffee', 'board games', 'cozy home', 'skincare', 'hiking', 'books', 'tea', 'tech gadgets', 'cooking', 'plants'];
+const SUGGESTIONS = ['coffee', 'board games', 'cozy home', 'candles', 'drawing', 'tea', 'cats', 'skincare', 'hiking', 'books', 'cooking', 'plants'];
+const NOVELTY = [
+  { id: 'strict', title: 'Only what I asked', hint: 'Every idea matches your words' },
+  { id: 'mixed', title: 'Mix', hint: 'Mostly matches, plus a few new things' },
+  { id: 'surprise', title: 'Surprise me', hint: 'Half of the ideas are new for them' },
+];
+const WHO = [['', 'Anyone'], ['woman', 'Woman'], ['man', 'Man'], ['girl', 'Girl'], ['boy', 'Boy'], ['teenager', 'Teenager'], ['colleague', 'Colleague'], ['parents', 'Parents'], ['couple', 'Couple']];
+const OCCASION = [['', 'Any occasion'], ['birthday', 'Birthday'], ['new year', 'New Year'], ['wedding', 'Wedding'], ['housewarming', 'Housewarming'], ['thank you', 'Thank you'], ["valentine's day", "Valentine's Day"], ['just because', 'Just because']];
 
 function Badge({ offer }) {
   return (
@@ -53,6 +60,7 @@ function IdeaCard({ offer, listId, hasLists, onAdded }) {
       <div className="idea-body">
         <Badge offer={offer} />
         <h3 className="idea-title" title={offer.title}>{offer.title}</h3>
+        {offer.via && <p className="muted small idea-why">For: {offer.via}</p>}
         {offer.why && <p className="muted small idea-why">{offer.why}</p>}
         {offer.verified === false && <p className="muted small idea-why">We could not open this shop automatically — please check price and details there.</p>}
       </div>
@@ -76,6 +84,10 @@ export default function Discover() {
   const [listId, setListId] = useState('');
   const [interests, setInterests] = useState('');
   const [budget, setBudget] = useState('');
+  const [budgetMin, setBudgetMin] = useState('');
+  const [novelty, setNovelty] = useState('mixed');
+  const [who, setWho] = useState('');
+  const [occasion, setOccasion] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null); // { offers, cached }
@@ -87,7 +99,7 @@ export default function Discover() {
   }, []);
 
   const addSuggestion = (s) => {
-    const have = interests.split(',').map((x) => x.trim().toLowerCase());
+    const have = interests.toLowerCase();
     if (have.includes(s)) return;
     setInterests((cur) => (cur.trim() ? `${cur.trim().replace(/,$/, '')}, ${s}` : s));
   };
@@ -97,7 +109,7 @@ export default function Discover() {
     setBusy(true);
     setError('');
     try {
-      const d = await api('/discover/search', { method: 'POST', body: { interests, budget: budget || undefined } });
+      const d = await api('/discover/search', { method: 'POST', body: { interests, budget: budget || undefined, budgetMin: budgetMin || undefined, novelty, who: who || undefined, occasion: occasion || undefined } });
       setResult(d);
       setRemaining(d.remaining);
     } catch (err) {
@@ -115,24 +127,49 @@ export default function Discover() {
       {status && !status.enabled && <p className="notice">Gift ideas are not switched on yet. Please check back soon.</p>}
 
       <form className="card stack" onSubmit={search}>
-        <label>What do you like? <small className="muted">(or who is it for)</small>
-          <input required minLength={3} maxLength={300} value={interests} onChange={(e) => setInterests(e.target.value)} placeholder="coffee, board games, cozy evenings at home" />
+        <label>Who is it for and what do they like?
+          <textarea required minLength={3} maxLength={300} rows={3} value={interests} onChange={(e) => setInterests(e.target.value)} placeholder="She loves candles, drawing, tea and cats — what could I give her?" />
         </label>
         <div className="row">
           {SUGGESTIONS.map((s) => <button key={s} type="button" className="chip-btn" onClick={() => addSuggestion(s)}>{s}</button>)}
         </div>
+        <small className="muted">We look for every interest you mention and for gifts that combine them.</small>
+
+        <fieldset className="novelty">
+          <legend>What kind of ideas?</legend>
+          <div className="seg">
+            {NOVELTY.map((n) => (
+              <label key={n.id} className={`seg-opt ${novelty === n.id ? 'on' : ''}`}>
+                <input type="radio" name="novelty" value={n.id} checked={novelty === n.id} onChange={() => setNovelty(n.id)} />
+                <b>{n.title}</b><small className="muted">{n.hint}</small>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
         <div className="grid2">
-          <label>Budget per gift, ₴ <small className="muted">(optional)</small>
-            <input type="number" min="0" step="50" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="1500" />
+          <label>Recipient
+            <select value={who} onChange={(e) => setWho(e.target.value)}>{WHO.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
           </label>
-          <label>Add ideas to
-            {lists.length ? (
-              <select value={listId} onChange={(e) => setListId(e.target.value)}>
-                {lists.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}
-              </select>
-            ) : <span className="muted small">You have no wishlist yet — <Link to="/dashboard">create one</Link> to save ideas.</span>}
+          <label>Occasion
+            <select value={occasion} onChange={(e) => setOccasion(e.target.value)}>{OCCASION.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
           </label>
         </div>
+        <div className="grid2">
+          <label>Price from, ₴ <small className="muted">(optional)</small>
+            <input type="number" min="0" step="50" value={budgetMin} onChange={(e) => setBudgetMin(e.target.value)} placeholder="200" />
+          </label>
+          <label>Price up to, ₴ <small className="muted">(optional)</small>
+            <input type="number" min="0" step="50" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="1500" />
+          </label>
+        </div>
+        <label>Add ideas to
+          {lists.length ? (
+            <select value={listId} onChange={(e) => setListId(e.target.value)}>
+              {lists.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}
+            </select>
+          ) : <span className="muted small">You have no wishlist yet — <Link to="/dashboard">create one</Link> to save ideas.</span>}
+        </label>
         <div className="row between">
           <button className="btn" disabled={busy || (status && !status.enabled) || remaining === 0}>{busy ? 'Searching shops… this can take up to a minute' : 'Find ideas'}</button>
           {remaining !== null && <span className="muted small">{remaining} fresh {remaining === 1 ? 'search' : 'searches'} left today</span>}

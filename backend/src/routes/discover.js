@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { requireUser, isAdmin } from '../auth.js';
 import { hasAwsCredentials, bedrockConfig } from '../bedrock.js';
-import { cacheKey, findPartner, hostOf, normDomain, rankOffers, searchOffers, provider } from '../discover.js';
+import { cacheKey, findPartner, hostOf, normDomain, rankOffers, searchOffers, provider, NOVELTY } from '../discover.js';
 import { serperKey } from '../serper.js';
 import { ah, HttpError, str, num, httpUrl, intId } from '../util.js';
 
@@ -11,6 +11,20 @@ const r = Router();
 const DAILY_LIMIT = () => Number(process.env.DISCOVER_DAILY_LIMIT || 5);
 const CACHE_HOURS = () => Number(process.env.DISCOVER_CACHE_HOURS || 24);
 const enabled = () => process.env.DISCOVER_ENABLED !== 'false' && (process.env.DISCOVER_MOCK === 'true' || !!serperKey() || hasAwsCredentials());
+
+// Options of the search form, shared by the user search and the admin tester.
+const WHO = ['woman', 'man', 'girl', 'boy', 'teenager', 'colleague', 'parents', 'couple'];
+const OCCASION = ['birthday', 'new year', 'wedding', 'housewarming', 'thank you', "valentine's day", 'just because'];
+function searchOptions(body) {
+  const pick = (v, list) => (list.includes(v) ? v : '');
+  return {
+    budget: num(body.budget) || null,
+    budgetMin: num(body.budgetMin) || null,
+    novelty: NOVELTY.includes(body.novelty) ? body.novelty : 'mixed',
+    who: pick(body.who, WHO),
+    occasion: pick(body.occasion, OCCASION),
+  };
+}
 
 const activePartners = async () => (await query('SELECT * FROM partners WHERE active ORDER BY id')).rows;
 
@@ -42,9 +56,7 @@ r.post('/discover/search', requireUser, ah(async (req, res) => {
   if (!enabled()) throw new HttpError(503, 'Gift ideas are not switched on yet');
   const interests = str(req.body.interests, 300);
   if (!interests || interests.length < 3) throw new HttpError(400, 'Tell us a bit about what they like');
-  const budget = num(req.body.budget);
-  const currency = (str(req.body.currency, 3) || 'UAH').toUpperCase();
-  const params = { interests, budget, currency };
+  const params = { interests, currency: 'UAH', ...searchOptions(req.body) };
   const key = cacheKey(params);
   const limit = DAILY_LIMIT();
 
@@ -82,7 +94,7 @@ r.post('/discover/search', requireUser, ah(async (req, res) => {
   if (cached) await query('INSERT INTO discover_runs (user_id, cached) VALUES ($1, true)', [req.user.id]).catch(() => {});
 
   // Partners are applied at read time, so a new contract affects cached results immediately.
-  const ranked = rankOffers(offers, await activePartners());
+  const ranked = rankOffers(offers, await activePartners(), params.novelty === 'surprise' ? 1 : 3);
   await logEvents(req.user.id, ranked);
   res.json({ offers: ranked, cached, remaining: Math.max(0, limit - (await usedToday(req.user.id))) });
 }));
@@ -145,11 +157,11 @@ r.get('/admin/discover-check', requireUser, adminOnly, ah(async (_req, res) => {
 r.post('/admin/discover-run', requireUser, adminOnly, ah(async (req, res) => {
   const interests = str(req.body.interests, 300);
   if (!interests) throw new HttpError(400, 'Write what the person likes');
-  const params = { interests, budget: num(req.body.budget), currency: 'UAH', provider: ['serper', 'nova'].includes(req.body.provider) ? req.body.provider : undefined };
+  const params = { interests, currency: 'UAH', ...searchOptions(req.body), provider: ['serper', 'nova'].includes(req.body.provider) ? req.body.provider : undefined };
   const t0 = Date.now();
   const debug = {};
   try {
-    const offers = rankOffers(await searchOffers(params, await activePartners(), debug), await activePartners());
+    const offers = rankOffers(await searchOffers(params, await activePartners(), debug), await activePartners(), params.novelty === 'surprise' ? 1 : 3);
     res.json({ ok: true, provider: debug.provider || provider(params.provider), ms: Date.now() - t0, offers, debug });
   } catch (e) {
     res.json({ ok: false, provider: debug.provider || provider(params.provider), ms: Date.now() - t0, kind: e.kind || 'unknown', error: e.message, debug });

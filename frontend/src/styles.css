@@ -307,3 +307,13 @@ section > .row.between { margin-top: 24px; }
 .bookmarklet { cursor: grab; text-transform: none; letter-spacing: .02em; font-size: .95rem; }
 .bookmarklet:active { cursor: grabbing; }
 kbd { font-family: var(--mono); font-size: .8em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: #fff; }
+
+/* gift ideas form: kind of ideas */
+.novelty { border: 0; padding: 0; margin: 0; min-width: 0; }
+.novelty legend { padding: 0; margin-bottom: 6px; font-weight: 600; }
+.seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 640px) { .seg { grid-template-columns: 1fr; } }
+.seg-opt { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 6px; cursor: pointer; background: #fff; }
+.seg-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.seg-opt.on { border-color: var(--accent); background: var(--cream); }
+.seg-opt:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }

@@ -3,7 +3,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { parseCandidates, rankOffers, findPartner, cacheKey, buildPrompt, normDomain, baseDomain, verifyCandidates, searchSerper, shoppingToOffers, diversify, parseCandidatesPlan, titlesAgree, isForeignMarketplace, isPlaceholderHost, normalizeUrl } from '../src/discover.js';
+import { parseCandidates, rankOffers, findPartner, cacheKey, buildPrompt, normDomain, baseDomain, verifyCandidates, searchSerper, shoppingToOffers, diversify, roundRobin, planSystem, parseCandidatesPlan, titlesAgree, isForeignMarketplace, isPlaceholderHost, normalizeUrl } from '../src/discover.js';
 import { parsePriceText } from '../src/serper.js';
 import { signRequest, signingKey, collectCitations, collectToolInfo } from '../src/bedrock.js';
 
@@ -158,14 +158,18 @@ test('shopping listings: real shop links only, budget respected, shops varied', 
   assert.deepEqual(o.map((x) => x.url), ['https://rozetka.com.ua/p1/p1/', 'https://temu.com/x']);
   assert.equal(st.googleRedirect, 1); assert.equal(st.overBudget, 1);
   const many = Array.from({ length: 6 }, (_, i) => ({ ...o[0], url: `https://rozetka.com.ua/p${i}/` }));
-  assert.equal(diversify(many).length, 3);
+  assert.equal(diversify(many).length, 4);
+  assert.deepEqual(roundRobin([[1, 2, 3], [4], [5, 6]]), [1, 4, 5, 2, 6, 3]);
+  assert.match(planSystem('strict'), /No "adjacent"/);
+  assert.match(planSystem('surprise'), /4 objects "adjacent"/);
+  assert.notEqual(cacheKey({ interests: 'tea', novelty: 'strict', currency: 'UAH' }), cacheKey({ interests: 'tea', novelty: 'surprise', currency: 'UAH' }));
   assert.deepEqual(parseCandidatesPlan('```json\n[{"q":"кавомолка","fit":"direct"},{"q":"чай","fit":"adjacent"},{"q":""}]```').map((x) => x.fit), ['direct', 'adjacent']);
 });
 
 test('serper pipeline: Google listings first, page-checked web results as fallback', async () => {
   const debug = {};
   const out = await searchSerper({ interests: 'кава', budget: null, currency: 'UAH' }, [], debug, {
-    planQueries: async () => [{ q: 'кавомолка', fit: 'direct' }, { q: 'чай', fit: 'adjacent' }],
+    planQueries: async () => [{ q: 'кавомолка', fit: 'direct', for: 'кава' }, { q: 'чай', fit: 'adjacent', for: 'чай' }],
     shoppingSearch: async (q) => [{ title: `${q} 1`, shop: 'Rozetka', url: `https://rozetka.com.ua/${q}/p1/`, price: 700, currency: 'UAH', imageUrl: 'https://i/1.jpg' }],
     webSearch: async () => [{ title: 'Кавомолка Hario', url: 'https://shop-a.com.ua/p/1' }, { title: 'x', url: 'https://www.example.com/p' }],
     fetcher: async (u) => ({ title: 'Кавомолка Hario', url: u, price: 900, currency: 'UAH', isProduct: true }),
@@ -174,6 +178,17 @@ test('serper pipeline: Google listings first, page-checked web results as fallba
   assert.equal(out.find((o) => o.fit === 'adjacent').shop, 'Rozetka');
   assert.ok(out.some((o) => o.url === 'https://shop-a.com.ua/p/1' && o.price === 900));
   assert.equal(debug.stats.fromShopping, 2);
+  assert.equal(out.find((o) => o.fit === 'adjacent').via, 'чай');
+});
+
+test('serper pipeline: every interest is represented, not only the first query', async () => {
+  const out = await searchSerper({ interests: 'свічки, малювання, чай, коти', budget: null, currency: 'UAH' }, [], {}, {
+    planQueries: async () => ['свічки', 'малювання', 'чай', 'коти'].map((q) => ({ q, fit: 'direct', for: q })),
+    shoppingSearch: async (q) => Array.from({ length: 8 }, (_, i) => ({ title: `${q} ${i}`, shop: `S${i}`, url: `https://shop${i}-${encodeURIComponent(q)}.com.ua/p/${i}/`, price: 300, currency: 'UAH' })),
+    webSearch: async () => [],
+    fetcher: async () => { throw new Error('x'); },
+  });
+  assert.deepEqual([...new Set(out.map((o) => o.via))].sort(), ['коти', 'малювання', 'свічки', 'чай']);
 });
 
 test('cache key ignores case, order and punctuation; budget is bucketed', () => {
