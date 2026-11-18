@@ -324,9 +324,6 @@ kbd { font-family: var(--mono); font-size: .8em; border: 1px solid var(--line); 
 .tip-tag { display: inline-block; font-family: var(--mono); font-size: .66rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
   background: #fff; color: var(--forest); padding: 1px 8px; border-radius: 99px; margin-right: 4px; vertical-align: 1px; }
 .field-error { color: var(--accent); }
-.browser-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip-tab { font: inherit; font-size: .85rem; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 12px; cursor: pointer; }
-.chip-tab.on { background: var(--ink); color: #fff; border-color: var(--ink); }
 details summary { cursor: pointer; color: var(--accent); }
 
 /* Clickable gift cards: the owner edits the gift, a guest opens it in the shop */
@@ -367,3 +364,6 @@ details summary { cursor: pointer; color: var(--accent); }
 .dash-title { text-align: left; font-family: "Italiana", Georgia, serif; font-weight: 400; text-transform: uppercase; letter-spacing: .05em; font-size: 1.6rem; margin: 28px 0 14px; }
 .custom-occasion { margin-top: 8px; }
 .card.empty .meta-text { max-width: 64ch; margin: 0 auto; }
+.intro-text { font-size: .86rem; max-width: 70ch; }
+details.meta-text summary { font-family: var(--mono); }
+details.meta-text p { margin: 8px 0 0; }
