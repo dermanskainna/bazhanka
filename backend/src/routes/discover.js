@@ -28,6 +28,37 @@ function searchOptions(body) {
 
 const activePartners = async () => (await query('SELECT * FROM partners WHERE active ORDER BY id')).rows;
 
+async function getUserSavedInterests(userId) {
+  const { rows } = await query(
+    `SELECT i.title, i.note, w.title AS wishlist_title, w.occasion
+     FROM items i
+     JOIN wishlists w ON w.id = i.wishlist_id
+     WHERE w.owner_id = $1
+     ORDER BY i.created_at DESC
+     LIMIT 30`,
+    [userId],
+  );
+
+  return rows;
+}
+
+async function getUserDiscoverHistory(userId) {
+  const { rows } = await query(
+    `SELECT domain, kind, label, count(*)::int AS count
+     FROM discover_events
+     WHERE user_id = $1
+       AND kind IN ('click', 'add')
+       AND created_at > now() - interval '90 days'
+       AND domain IS NOT NULL
+     GROUP BY domain, kind, label
+     ORDER BY count(*) DESC
+     LIMIT 20`,
+    [userId],
+  );
+
+  return rows;
+}
+
 async function usedToday(userId) {
   const { rows } = await query(
     `SELECT count(*)::int AS n FROM discover_runs WHERE user_id = $1 AND NOT cached AND created_at > now() - interval '1 day'`,
@@ -56,7 +87,21 @@ r.post('/discover/search', requireUser, ah(async (req, res) => {
   if (!enabled()) throw new HttpError(503, 'Gift ideas are not switched on yet');
   const interests = str(req.body.interests, 300);
   if (!interests || interests.length < 3) throw new HttpError(400, 'Tell us a bit about what they like');
-  const params = { interests, currency: 'UAH', ...searchOptions(req.body) };
+ const budget = num(req.body.budget);
+ const currency = (str(req.body.currency, 3) || 'UAH').toUpperCase();
+
+ const savedInterests = await getUserSavedInterests(req.user.id);
+ const discoverHistory = await getUserDiscoverHistory(req.user.id);
+
+ const params = {
+  interests,
+  budget,
+  currency,
+  preferences: {
+    savedInterests,
+    discoverHistory,
+  },
+ };
   const key = cacheKey(params);
   const limit = DAILY_LIMIT();
 

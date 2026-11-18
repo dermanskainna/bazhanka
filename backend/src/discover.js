@@ -84,11 +84,56 @@ export function titlesAgree(a, b) {
 }
 
 // Version prefix: bump it whenever the pipeline changes so old (possibly wrong) cached results die.
-const CACHE_VERSION = 'v4';
-export function cacheKey({ interests, budget, budgetMin, currency, provider: pv, novelty, who, occasion }) {
-  const norm = String(interests).toLowerCase().replace(/[^\p{L}\p{N}\s,]/gu, ' ').split(/[\s,]+/).filter(Boolean).sort().join(' ');
-  const b = budget ? Math.ceil(Number(budget) / 500) * 500 : 0; // coarse buckets so near-identical budgets share a cache entry
-  return crypto.createHash('sha256').update(`${CACHE_VERSION}|${provider(pv)}|${country()}|${norm}|${b}|${budgetMin || 0}|${currency}|${novelty || 'mixed'}|${who || ''}|${occasion || ''}`).digest('hex').slice(0, 40);
+const CACHE_VERSION = 'v6';
+
+export function cacheKey({ interests, budget, currency, provider: pv, preferences }) {
+  const normalize = (value) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s,]/gu, ' ')
+      .split(/[\s,]+/)
+      .filter(Boolean)
+      .sort()
+      .join(' ');
+
+  const norm = normalize(interests);
+
+  const saved = Array.isArray(preferences?.savedInterests)
+    ? preferences.savedInterests
+        .map((item) =>
+          normalize([
+            item.title,
+            item.note,
+            item.wishlist_title,
+            item.occasion,
+          ].filter(Boolean).join(' '))
+        )
+        .filter(Boolean)
+        .sort()
+        .join('|')
+    : '';
+
+  const history = Array.isArray(preferences?.discoverHistory)
+    ? preferences.discoverHistory
+        .map((item) =>
+          normalize([
+            item.domain,
+            item.kind,
+            item.label,
+            item.count,
+          ].filter(Boolean).join(' '))
+        )
+        .filter(Boolean)
+        .sort()
+        .join('|')
+    : '';
+
+  const b = budget ? Math.ceil(Number(budget) / 500) * 500 : 0;
+
+  return crypto.createHash('sha256')
+    .update(`${CACHE_VERSION}|${provider(pv)}|${country()}|${norm}|${saved}|${history}|${b}|${currency}`)
+    .digest('hex')
+    .slice(0, 40);
 }
 
 // ---------- prompt ----------
@@ -182,24 +227,100 @@ export function parseCandidates(text) {
 // relevance group, it never lets an irrelevant partner product beat a direct match. Inside a group,
 // cards checked against the real page come before unchecked ones.
 // Returned offers carry a label: 'match' | 'new', plus `partner` ({ id, name } | null).
-export function rankOffers(offers, partners, directPerNew = 3) {
-  const decorated = offers.map((o, i) => {
-    const partner = findPartner(hostOf(o.url), partners.filter((p) => p.active));
-    return { ...o, partner: partner ? { id: partner.id, name: partner.name } : null, _boost: partner ? partner.boost : 0, _i: i };
-  });
-  const group = (o) => (o.fit === 'direct' ? 0 : 1);
-  decorated.sort((a, b) => group(a) - group(b) || (b.verified ? 1 : 0) - (a.verified ? 1 : 0) || b._boost - a._boost || a._i - b._i);
 
-  // Keep roughly 1 "try something new" per 4 cards, interleaved instead of dumped at the end.
-  const direct = decorated.filter((o) => o.fit === 'direct');
-  const adjacent = decorated.filter((o) => o.fit !== 'direct');
-  const merged = [];
-  while (direct.length || adjacent.length) {
-    for (let k = 0; k < directPerNew && direct.length; k++) merged.push(direct.shift());
-    if (adjacent.length) merged.push(adjacent.shift());
-    else if (!direct.length) break;
+export function rankOffers(offers, partners) {
+  const decorated = offers.map((o, i) => {
+    const partner = findPartner(
+      hostOf(o.url),
+      partners.filter((p) => p.active)
+    );
+
+    const category = ['direct', 'interest', 'discovery', 'creative']
+      .includes(o.category)
+      ? o.category
+      : o.fit === 'direct' ? 'direct' : 'interest';
+
+    return {
+      ...o,
+      category,
+      fit: category === 'direct' ? 'direct' : 'adjacent',
+      partner: partner ? { id: partner.id, name: partner.name } : null,
+      _boost: partner ? partner.boost : 0,
+      _i: i
+    };
+  });
+
+  // Спочатку сортуємо товари всередині кожної категорії.
+  // Перевірені товари та партнерський пріоритет зберігаються.
+  const categories = {
+    direct: [],
+    interest: [],
+    discovery: [],
+    creative: []
+  };
+
+  for (const o of decorated) {
+    categories[o.category].push(o);
   }
-  return merged.map(({ _boost, _i, ...o }) => ({ ...o, label: o.fit === 'direct' ? 'match' : 'new' }));
+
+  for (const list of Object.values(categories)) {
+    list.sort((a, b) =>
+      (Number(b.verified) - Number(a.verified)) ||
+      (b._boost - a._boost) ||
+      (a._i - b._i)
+    );
+  }
+
+  // Черговість показу: прямі збіги чергуються
+  // з рекомендаціями за інтересами та новими ідеями.
+  const schedule = [
+    'direct',
+    'interest',
+    'direct',
+    'discovery',
+    'direct',
+    'creative',
+    'direct',
+    'interest',
+    'discovery',
+    'direct',
+    'creative',
+    'interest',
+    'discovery'
+  ];
+
+  const merged = [];
+  let remaining = decorated.length;
+
+  while (remaining > 0) {
+    let added = false;
+
+    for (const category of schedule) {
+      if (categories[category].length > 0) {
+        merged.push(categories[category].shift());
+        remaining--;
+        added = true;
+        break;
+      }
+    }
+
+    // Якщо категорії зі стандартного плану вичерпалися,
+    // додаємо решту товарів без втрати результатів.
+    if (!added) {
+      for (const category of Object.keys(categories)) {
+        if (categories[category].length > 0) {
+          merged.push(categories[category].shift());
+          remaining--;
+          break;
+        }
+      }
+    }
+  }
+
+  return merged.map(({ _boost, _i, ...o }) => ({
+    ...o,
+    label: o.category === 'direct' ? 'match' : 'new'
+  }));
 }
 
 // ---------- verification ----------
@@ -324,59 +445,185 @@ function mockOffers({ interests }) {
 
 // ---------- Google-based pipeline (serper) ----------
 
-export const NOVELTY = ['strict', 'mixed', 'surprise'];
-// How many queries of each kind the planner writes: strict = only what was asked, surprise = lots of new ideas.
-const PLAN_SHAPE = { strict: { direct: 6, adjacent: 0 }, mixed: { direct: 5, adjacent: 2 }, surprise: { direct: 3, adjacent: 4 } };
+const PLAN_SYSTEM = `
+You are an intelligent personalized product discovery engine.
 
-export function planSystem(novelty = 'mixed') {
-  const { direct, adjacent } = PLAN_SHAPE[novelty] || PLAN_SHAPE.mixed;
-  return `You are a gift expert. You turn a description of a person into Google Shopping search queries for online shops in Ukraine.
-First find ALL separate interests in the description (a person can like several things). Then write queries so that EVERY interest is covered.
-Reply with ONLY a JSON array of ${direct + adjacent} objects: {"q": string, "fit": "direct" | "adjacent", "for": string}
-- ${direct} objects "direct": things a person with these interests would want. Give each interest at least one query, and make at least 2 queries COMBINE two interests in one product (for example a candle with a cat figure, a tea set with cat print).
-${adjacent ? `- ${adjacent} objects "adjacent": a NEW discovery - a different product category that fits the person's taste or mood but that they did not mention and probably do not own yet. Do not repeat the interests themselves.` : '- No "adjacent" objects: stay strictly with what the person asked for.'}
-- "q": a concrete product to buy (not an activity), 2-5 words, in Ukrainian, no shop names, no prices, no quotes.
-- "for": which interest(s) the query serves, 1-3 words, in the language of the description.
-Prefer gifts over everyday items; respect the recipient and occasion when they are given.`;
-}
+Your task is to understand the user's interests and generate
+diverse Google Shopping search queries for real products
+available in Ukraine.
 
-function planPrompt({ interests, who, occasion }) {
-  const lines = [`Description: ${interests}`];
-  if (who) lines.push(`Recipient: ${who}`);
-  if (occasion) lines.push(`Occasion: ${occasion}`);
-  return lines.join('\n');
-}
+Do not simply repeat or rephrase the user's keywords.
+
+Analyze the semantic meaning of each interest and discover
+products that match the user's taste.
+
+Generate exactly 11 queries:
+
+1. direct (3 queries):
+Products explicitly matching the user's current request.
+
+2. interest (3 queries):
+Products related to the user's interests but not explicitly
+mentioned in the current request.
+
+3. discovery (3 queries):
+New hobbies, activities, tools or product categories that
+the user might enjoy based on their interests.
+
+4. creative (2 queries):
+Unexpected combinations of at least two user interests.
+
+Personalization rules:
+- Consider previous searches, saved products and interaction history if provided.
+- Give more weight to categories represented repeatedly in saved products.
+- Use discoverHistory as an additional personalization signal:
+  - Repeated clicks indicate interest in the corresponding product domain.
+  - Repeated adds indicate stronger interest than clicks.
+  - Interactions labeled "new" indicate interest in discovering unfamiliar products.
+  - Interactions labeled "match" indicate interest in products matching previous searches.
+- Consider interaction counts when identifying recurring interests.
+- Do not treat a single interaction as a strong preference.
+- Use interaction history to guide interest and discovery queries, without letting it override the current request.
+- Avoid categories the user explicitly dislikes.
+- Discovery queries must explore genuinely different categories.
+- Creative queries must combine at least two interests.
+- Never recommend completely unrelated products.
+- Do not ignore the current request.
+
+Search rules:
+- Queries must be in Ukrainian.
+- Each query must describe a concrete product or category.
+- Avoid generic queries.
+- Avoid repeating the same product category.
+- Do not include shop names, prices or quotation marks.
+- Prefer products available for online purchase in Ukraine.
+
+Return ONLY a JSON array:
+[
+  {
+    "q": "search query",
+    "category": "direct",
+    "reason": "short explanation in Ukrainian"
+  }
+]
+
+Allowed categories:
+direct, interest, discovery, creative.
+`;
+
 
 // Asks the model for product search queries; falls back to the user's own words when the model is unavailable.
+
 export async function planQueries(params, debug = {}) {
-  const novelty = NOVELTY.includes(params.novelty) ? params.novelty : 'mixed';
-  const fallback = () => {
-    const parts = String(params.interests).split(/[,;\n]+|\s+(?:та|і|й|and)\s+/i).map((x) => x.trim()).filter((x) => x.length > 1).slice(0, 6);
-    const plan = parts.map((q) => ({ q: `${q} подарунок`, fit: 'direct', for: q }));
-    if (parts.length > 1) plan.push({ q: `${parts[0]} ${parts[1]}`, fit: 'direct', for: `${parts[0]} + ${parts[1]}` });
-    return plan;
-  };
-  if (!hasAwsCredentials()) { debug.planner = 'fallback: no AWS credentials'; return fallback(); }
-  try {
-    const res = await converseWithWebSearch({ system: planSystem(novelty), prompt: planPrompt(params), maxTokens: 700, timeoutMs: 20_000, grounding: false });
-    let plan = parseCandidatesPlan(res.text);
-    if (novelty === 'strict') plan = plan.filter((x) => x.fit === 'direct');
-    if (plan.length) { debug.planner = 'ai'; return plan; }
-    debug.planner = `fallback: unreadable reply ${res.text.slice(0, 120)}`;
-  } catch (e) {
-    debug.planner = `fallback: ${e.message}`.slice(0, 200);
+  const {
+    interests,
+    preferences = {}
+  } = params || {};
+
+  const fallback = String(interests || '')
+    .split(/[,;\n]+/)
+    .map((q) => q.trim())
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((q) => ({
+      q: q.slice(0, 80),
+      category: 'direct',
+      fit: 'direct',
+      reason: ''
+    }));
+
+  if (!hasAwsCredentials()) {
+    debug.planner = 'fallback:no-aws-credentials';
+    return fallback;
   }
-  return fallback();
+
+  const profile = {
+    preferredCategories: preferences.preferredCategories || [],
+    savedInterests: preferences.savedInterests || [],
+    discoverHistory: preferences.discoverHistory || [],
+    dislikedCategories: preferences.dislikedCategories || [],
+    discoveryLevel: preferences.discoveryLevel || 'medium'
+  };
+
+  try {
+    const res = await converseWithWebSearch({
+      system: PLAN_SYSTEM,
+      prompt: `
+Користувацький запит:
+${interests}
+
+Профіль користувача:
+${JSON.stringify(profile)}
+
+Створи пошукові запити відповідно до системних інструкцій.
+Враховуй вподобання та уникай небажаних категорій.
+`,
+      maxTokens: 900,
+      timeoutMs: 15_000,
+      grounding: false
+    });
+
+    const plan = parseCandidatesPlan(res.text);
+
+    if (plan.length) {
+      debug.planner = 'ai';
+      return plan;
+    }
+
+    debug.planner = 'fallback:empty-plan';
+    return fallback;
+  } catch (error) {
+    debug.planner = 'fallback:error';
+    debug.planError = error?.message || String(error);
+    return fallback;
+  }
 }
 
 export function parseCandidatesPlan(text) {
-  const a = text.indexOf('['), b = text.lastIndexOf(']');
+  const a = text.indexOf('[');
+  const b = text.lastIndexOf(']');
   let arr = [];
-  try { arr = JSON.parse(text.slice(a, b + 1)); } catch { arr = []; }
-  const clean = (v, n) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '');
+
+  if (a !== -1 && b > a) {
+    try {
+      arr = JSON.parse(text.slice(a, b + 1));
+    } catch {
+      arr = [];
+    }
+  }
+
+  const allowed = new Set([
+    'direct',
+    'interest',
+    'discovery',
+    'creative'
+  ]);
+
   return (Array.isArray(arr) ? arr : [])
-    .map((x) => ({ q: clean(x?.q, 80), fit: x?.fit === 'adjacent' ? 'adjacent' : 'direct', for: clean(x?.for, 60) }))
-    .filter((x) => x.q.length >= 2).slice(0, 8);
+    .map((x) => {
+      const category = allowed.has(x?.category)
+        ? x.category
+        : x?.fit === 'adjacent'
+          ? 'interest'
+          : 'direct';
+
+      return {
+        q: typeof x?.q === 'string'
+          ? x.q.replace(/\s+/g, ' ').trim().slice(0, 80)
+          : '',
+
+        category,
+
+        // Зберігаємо старе поле для сумісності з рештою коду
+        fit: category === 'direct' ? 'direct' : 'adjacent',
+
+        reason: typeof x?.reason === 'string'
+          ? x.reason.replace(/\s+/g, ' ').trim().slice(0, 200)
+          : ''
+      };
+    })
+    .filter((x) => x.q.length >= 2)
+    .slice(0, 11);
 }
 
 const isGoogleHost = (h) => !!h && /(^|\.)google\.[a-z.]+$/.test(h);
@@ -396,46 +643,125 @@ const MAX_PER_SHOP = 4;
 const MAX_RESULTS = 15;
 const PER_QUERY = 6;
 
-// Turns raw Google Shopping listings into offers: real merchant links only, price inside the budget.
-export function shoppingToOffers(listings, fit, { budget, budgetMin, currency }, stats = {}, via = null) {
+// Turns raw Google Shopping listings into offers: real merchant links only, relevant budget, varied shops.
+
+export function shoppingToOffers(listings, planOrFit, { budget, currency }, stats = {}) {
   const out = [];
+
+  const category = typeof planOrFit === 'object' && planOrFit
+    ? planOrFit.category || 'direct'
+    : planOrFit === 'adjacent' ? 'interest' : 'direct';
+
+  const fit = category === 'direct' ? 'direct' : 'adjacent';
+
+  const why = typeof planOrFit === 'object' && planOrFit
+    ? planOrFit.reason || ''
+    : '';
+
   for (const l of listings) {
     const url = httpUrl(unwrapGoogle(l.url));
     const host = hostOf(url);
-    if (!url || !l.title) { stats.badListing = (stats.badListing || 0) + 1; continue; }
-    if (isGoogleHost(host)) { stats.googleRedirect = (stats.googleRedirect || 0) + 1; continue; }
-    if (isPlaceholderHost(host) || isForeignMarketplace(host)) { stats.blockedShop = (stats.blockedShop || 0) + 1; continue; }
-    if (l.price && (l.currency || 'UAH') === currency) {
-      if (budget && l.price > budget * 1.15) { stats.overBudget = (stats.overBudget || 0) + 1; continue; }
-      if (budgetMin && l.price < budgetMin * 0.85) { stats.underBudget = (stats.underBudget || 0) + 1; continue; }
+
+    if (!url || !l.title) {
+      stats.badListing = (stats.badListing || 0) + 1;
+      continue;
     }
-    out.push({ title: l.title, url, fit, why: '', via, shop: l.shop || null, imageUrl: l.imageUrl || null, price: l.price || null, currency: l.price ? l.currency || (/\.ua$/.test(host) ? 'UAH' : null) : null, verified: true });
+
+    if (isGoogleHost(host)) {
+      stats.googleRedirect = (stats.googleRedirect || 0) + 1;
+      continue;
+    }
+
+    if (isPlaceholderHost(host) || isForeignMarketplace(host)) {
+      stats.blockedShop = (stats.blockedShop || 0) + 1;
+      continue;
+    }
+
+    if (budget && l.price && (l.currency || 'UAH') === currency && l.price > budget * 1.15) {
+      stats.overBudget = (stats.overBudget || 0) + 1;
+      continue;
+    }
+
+    out.push({
+      title: l.title,
+      url,
+      fit,
+      category,
+      why,
+      shop: l.shop || null,
+      imageUrl: l.imageUrl || null,
+      price: l.price || null,
+      currency: l.price ? l.currency || (/\.ua$/.test(host) ? 'UAH' : null) : null,
+      verified: true
+    });
   }
   return out;
 }
 
-// Takes one result from each query in turn, so that every interest is represented instead of the
-// first query filling the whole page.
-export function roundRobin(groups, perGroup = PER_QUERY) {
-  const lists = groups.map((g) => g.slice(0, perGroup));
-  const out = [];
-  for (let i = 0; i < perGroup; i++) for (const l of lists) if (l[i]) out.push(l[i]);
-  return out;
-}
+export function diversify(offers) {
+  const categories = {
+    direct: [],
+    interest: [],
+    discovery: [],
+    creative: []
+  };
 
-export function diversify(offers, max = MAX_RESULTS) {
+  for (const o of offers) {
+    const category = ['direct', 'interest', 'discovery', 'creative']
+      .includes(o.category)
+      ? o.category
+      : o.fit === 'direct' ? 'direct' : 'interest';
+
+    categories[category].push({
+      ...o,
+      category
+    });
+  }
+
   const perShop = new Map();
   const seen = new Set();
   const out = [];
-  for (const o of offers) {
-    const key = normalizeUrl(o.url);
-    const shop = hostOf(o.url);
-    if (!key || seen.has(key)) continue;
-    if ((perShop.get(shop) || 0) >= MAX_PER_SHOP) continue;
-    seen.add(key);
-    perShop.set(shop, (perShop.get(shop) || 0) + 1);
-    out.push(o);
-    if (out.length >= max) break;
+
+  const schedule = [
+    'direct',
+    'interest',
+    'direct',
+    'discovery',
+    'direct',
+    'creative',
+    'direct',
+    'interest',
+    'discovery',
+    'direct',
+    'creative',
+    'interest'
+  ];
+
+  while (out.length < MAX_RESULTS) {
+    let added = false;
+
+    for (const category of schedule) {
+      const list = categories[category];
+
+      while (list.length > 0) {
+        const o = list.shift();
+        const key = normalizeUrl(o.url);
+        const shop = hostOf(o.url);
+
+        if (!key || seen.has(key)) continue;
+        if ((perShop.get(shop) || 0) >= MAX_PER_SHOP) continue;
+
+        seen.add(key);
+        perShop.set(shop, (perShop.get(shop) || 0) + 1);
+        out.push(o);
+        added = true;
+        break;
+      }
+
+      if (added) break;
+    }
+
+    if (!added) break;
   }
   return out;
 }
@@ -459,7 +785,7 @@ export async function searchSerper(params, partners, debug = {}, deps = {}) {
     if (r.status === 'rejected') { errors.push(r.reason.message); groups.push([]); return; }
     stats.listings = (stats.listings || 0) + r.value.length;
     if (i === 0 && r.value[0]) debug.sampleListing = r.value[0];
-    groups.push(shoppingToOffers(r.value, plan[i].fit, params, stats, plan[i].for || plan[i].q));
+    offers.push(...shoppingToOffers(r.value, plan[i], params, stats));
   });
   if (errors.length === plan.length) throw Object.assign(new Error(errors[0]), { kind: 'search' });
   if (errors.length) debug.errors = errors;
