@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { query, tx } from '../db.js';
 import { requireUser } from '../auth.js';
 import { fetchPreview } from '../preview.js';
+import { OWN_PHOTO } from './photos.js';
 import { ah, HttpError, str, num, httpUrl, randomCode, intId } from '../util.js';
 
 const r = Router();
@@ -24,11 +25,17 @@ async function ownedItem(id, userId) {
   return rows[0];
 }
 
+// A shop picture (http/https) or a photo the user uploaded here (/api/photos/<key>).
+export function imageUrl(v) {
+  const s = str(v, 2000);
+  return s && OWN_PHOTO.test(s) ? s : httpUrl(s);
+}
+
 function itemFields(body) {
   return {
     title: str(body.title, 300),
     url: httpUrl(body.url),
-    image_url: httpUrl(body.imageUrl),
+    image_url: imageUrl(body.imageUrl),
     price: num(body.price),
     currency: (str(body.currency, 3) || 'UAH').toUpperCase(),
     note: str(body.note, 1000),

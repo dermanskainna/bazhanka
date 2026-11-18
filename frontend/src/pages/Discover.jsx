@@ -122,9 +122,9 @@ export default function Discover() {
   return (
     <div className="page wide">
       <h1>Gift ideas</h1>
-      <p className="lead">Not sure what to put on your list? Tell us what you like and we will look for real things in online shops.</p>
+      <p className="lead meta-text">Not sure what to put on your list? Tell us what you like and we’ll find real things in online shops</p>
 
-      {status && !status.enabled && <p className="notice">Gift ideas are not switched on yet. Please check back soon.</p>}
+      {status && !status.enabled && <p className="notice meta-text">Gift ideas are not switched on yet — please check back soon</p>}
 
       <form className="card stack" onSubmit={search}>
         <label>Who is it for and what do they like?
@@ -133,7 +133,7 @@ export default function Discover() {
         <div className="row">
           {SUGGESTIONS.map((s) => <button key={s} type="button" className="chip-btn" onClick={() => addSuggestion(s)}>{s}</button>)}
         </div>
-        <small className="muted">We look for every interest you mention and for gifts that combine them.</small>
+        <small className="meta-text">We look for every interest you mention and for gifts that combine them</small>
 
         <fieldset className="novelty">
           <legend>What kind of ideas?</legend>
@@ -156,10 +156,10 @@ export default function Discover() {
           </label>
         </div>
         <div className="grid2">
-          <label>Price from, ₴ <small className="muted">(optional)</small>
+          <label><span className="label-row">Price from, ₴ <small className="label-note">(optional)</small></span>
             <input type="number" min="0" step="50" value={budgetMin} onChange={(e) => setBudgetMin(e.target.value)} placeholder="200" />
           </label>
-          <label>Price up to, ₴ <small className="muted">(optional)</small>
+          <label><span className="label-row">Price up to, ₴ <small className="label-note">(optional)</small></span>
             <input type="number" min="0" step="50" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="1500" />
           </label>
         </div>
@@ -168,23 +168,23 @@ export default function Discover() {
             <select value={listId} onChange={(e) => setListId(e.target.value)}>
               {lists.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}
             </select>
-          ) : <span className="muted small">You have no wishlist yet — <Link to="/dashboard">create one</Link> to save ideas.</span>}
+          ) : <span className="meta-text">You have no wishlist yet — <Link to="/dashboard">create one</Link> to save ideas</span>}
         </label>
         <div className="row between">
           <button className="btn" disabled={busy || (status && !status.enabled) || remaining === 0}>{busy ? 'Searching shops… this can take up to a minute' : 'Find ideas'}</button>
-          {remaining !== null && <span className="muted small">{remaining} fresh {remaining === 1 ? 'search' : 'searches'} left today</span>}
+          {remaining !== null && <span className="meta-text">{remaining} fresh {remaining === 1 ? 'search' : 'searches'} left today</span>}
         </div>
         {error && <p className="error">{error}</p>}
       </form>
 
       {result && (
         result.offers.length === 0
-          ? <div className="card empty"><p>We could not find good matches. Try different words or a bigger budget.</p></div>
+          ? <div className="card empty"><p className="meta-text">We couldn’t find good matches — try different words or a bigger budget</p></div>
           : (
             <>
               <div className="row between">
                 <h2>Ideas for you</h2>
-                <span className="muted small">Some shops are partners who pay for promotion — they are marked. We still show only what fits your taste.</span>
+                <span className="meta-text">Some shops are partners who pay for promotion — they are marked. We still show only what fits your taste</span>
               </div>
               <div className="ideas-grid">
                 {result.offers.map((o) => (

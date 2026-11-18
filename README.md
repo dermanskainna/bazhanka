@@ -19,6 +19,7 @@ Team: Inna Dermanska, Bohdana Skochynska, Ksenia Nimas (UCU).
 | Sign up / sign in (email + password, httpOnly session cookie) | `/signup`, `/signin` |
 | Create wishlists for an occasion and share them by link (copy or Telegram) | `/dashboard`, `/l/<code>` |
 | Add an item by pasting a shop link: title, photo and price are filled in automatically when the shop allows it (JSON-LD / Open Graph); otherwise fill the item in by hand | owner view of a list |
+| Own photo for a gift: upload from your computer or phone; the browser shrinks it to 1200 px (~100–300 KB) and it is stored in the database, no extra storage service | gift form |
 | Secret reservation: guests see "already reserved", the owner sees nothing | guest view of a list |
 | Chip in: several guests add amounts to one gift, with a progress bar | items marked "chip-in" |
 | Add from any shop with the “+ Bazhanka” browser button (bookmarklet), also where a pasted link can’t be read | `/button`, `/add` |
@@ -54,17 +55,21 @@ Cost and AWS notes:
 ```
 backend/    Node.js + Express API, PostgreSQL (pg). Also serves the built frontend.
   src/index.js           server entry, static hosting, error handling
-  src/db.js              connection pool + schema (created automatically on start)
+  src/db.js              connection pool (or RPC mode on AWS) + schema, created automatically on start
+  src/dbrpc.js           AWS only: signed SQL calls from the edge Lambda to the main Lambda
   src/auth.js            JWT session cookie, password hashing in routes/auth.js
   src/preview.js         shop link → title/photo/price (with SSRF protection)
-  src/dbrpc.js           AWS only: signed SQL calls from the edge Lambda to the main Lambda
-  src/routes/            auth, wishlists/items/reservations, santa, feedback/stats
-  test/api.test.js       integration tests (needs Postgres)
+  src/discover.js        gift ideas pipeline; src/serper.js (Google Shopping) and src/bedrock.js (Amazon Bedrock) clients
+  src/routes/            auth, wishlists/items/reservations, santa, discover, photos, feedback/stats
+  test/                  node:test suites (api, dbrpc, discover and photos need Postgres)
 frontend/   React 18 + Vite single-page app
-  src/pages/             Home, Auth, Dashboard, ListPage (owner + guest views), Santa, Admin
+  src/pages/             Home, Auth, Dashboard, ListPage (owner + guest), EditItem, Discover, Santa, Admin,
+                         AddButton (/button) and AddFromShop (/add) for the "+ Bazhanka" browser button
+  src/bookmarklet.js     the "+ Bazhanka" button code (runs on shop pages)
+  src/photo.js           shrinks and uploads own gift photos
 infra/      Dockerfile, docker-compose.yml (local), render.yaml (Render),
             ecr.yml / backend.yml / frontend.yml / certificate.sh (AWS, driven by the Makefile)
-docs/       report template for the user-testing report
+docs/       AWS deployment report, deploy report, user-testing report template, screenshots
 ```
 
 ## Run locally
@@ -212,5 +217,5 @@ sign-ups (goal 50), wishlists (20), % of guests who reserved (≥ 30%), % of gue
 - Some shops block automated requests, and our link preview deliberately does not pretend to be a browser. For those shops
   the form points to the **“+ Bazhanka” browser button** (`/button`): a bookmarklet that runs in the person's own browser on the
   product page they already opened, reads the same product data (JSON-LD `Product`, Open Graph / `itemprop` tags, otherwise
-  the heading and the biggest picture) and opens `/add` with the form prefilled. The shop sees an ordinary visitor; nothing is
+  the heading and the biggest picture) and opens `/add` with the form prefilled in a small window over the shop, which closes itself once the gift is added. The shop sees an ordinary visitor; nothing is
   saved until the person presses *Add to list*. Code: `frontend/src/bookmarklet.js`, pages `AddButton.jsx` and `AddFromShop.jsx`.

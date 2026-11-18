@@ -3,8 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, money, niceDate } from '../api.js';
 import { useSession } from '../session.jsx';
 import { GiftIcon } from '../icons.jsx';
+import { onListChanged } from '../sync.js';
 
-const OCCASIONS = ['Birthday', 'Christmas', 'St Nicholas Day', 'Graduation', 'New Year', 'Wedding', 'Just because'];
+const OCCASIONS = ['Birthday', 'Christmas', 'St Nicholas Day', 'Graduation', 'New Year', 'Wedding'];
+const OTHER = '__other'; // "Other…": the person types their own occasion
 
 export default function Dashboard() {
   const { user } = useSession();
@@ -13,17 +15,23 @@ export default function Dashboard() {
   const [gifts, setGifts] = useState([]);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ title: '', occasion: 'Birthday', eventDate: '' });
+  const [customOccasion, setCustomOccasion] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api('/wishlists').then((d) => setLists(d.wishlists)).catch((e) => setError(e.message));
-    api('/me/gifts').then((d) => setGifts(d.gifts)).catch(() => {});
+    const load = () => {
+      api('/wishlists').then((d) => setLists(d.wishlists)).catch((e) => setError(e.message));
+      api('/me/gifts').then((d) => setGifts(d.gifts)).catch(() => {});
+    };
+    load();
+    return onListChanged(load); // item counts stay right when gifts are added in another tab
   }, []);
 
   const create = async (e) => {
     e.preventDefault();
     try {
-      const { wishlist } = await api('/wishlists', { method: 'POST', body: form });
+      const occasion = form.occasion === OTHER ? customOccasion.trim() : form.occasion;
+      const { wishlist } = await api('/wishlists', { method: 'POST', body: { ...form, occasion } });
       navigate(`/l/${wishlist.slug}`);
     } catch (err) {
       setError(err.message);
@@ -46,7 +54,12 @@ export default function Dashboard() {
               <label>Occasion
                 <select value={form.occasion} onChange={(e) => setForm({ ...form, occasion: e.target.value })}>
                   {OCCASIONS.map((o) => <option key={o}>{o}</option>)}
+                  <option value={OTHER}>Other…</option>
                 </select>
+                {form.occasion === OTHER && (
+                  <input className="custom-occasion" required autoFocus maxLength={40} value={customOccasion}
+                    onChange={(e) => setCustomOccasion(e.target.value)} placeholder="e.g. Housewarming" aria-label="Your occasion" />
+                )}
               </label>
               <label>Date (optional)<input type="date" value={form.eventDate} onChange={(e) => setForm({ ...form, eventDate: e.target.value })} /></label>
             </div>
@@ -65,7 +78,7 @@ export default function Dashboard() {
               <Link key={l.id} to={`/l/${l.slug}`} className="card list-card">
                 <span className="tag">{l.occasion || 'Wishlist'}</span>
                 <h3>{l.title}</h3>
-                <p className="muted">{l.itemCount} {l.itemCount === 1 ? 'item' : 'items'}{l.eventDate ? ` · ${niceDate(l.eventDate)}` : ''}</p>
+                <p className="meta-text">{l.itemCount} {l.itemCount === 1 ? 'item' : 'items'}{l.eventDate ? ` · ${niceDate(l.eventDate)}` : ''}</p>
               </Link>
             ))}
           </div>
@@ -75,7 +88,7 @@ export default function Dashboard() {
       <section>
         <div className="card cta">
           <h3>Don’t know what to wish for?</h3>
-          <p className="muted">Tell us what you like and get ideas from real shops — add them to your list in one tap.</p>
+          <p className="meta-text">Tell us what you like and get ideas from real shops — add them to your list in one tap</p>
           <Link to="/ideas" className="btn ghost">Get gift ideas</Link>
         </div>
       </section>
@@ -83,15 +96,18 @@ export default function Dashboard() {
       <section>
         <div className="card cta">
           <h3>Add from any shop in one click</h3>
-          <p className="muted">Put the “+ Bazhanka” button on your browser’s bookmarks bar. It fills in title, photo and price even where a pasted link can’t.</p>
+          <p className="meta-text">
+            Add gifts to your wishlist by hand — or save time with the <b style={{ whiteSpace: 'nowrap' }}>+ Bazhanka</b> button:
+            one click on any product in a shop, and it’s on your list with photo and price
+          </p>
           <Link to="/button" className="btn ghost">Get the button</Link>
         </div>
       </section>
 
       <section>
-        <h2>Gifts I’m giving</h2>
+        <h2 className="dash-title">Gifts I’m giving</h2>
         {gifts.length === 0 ? (
-          <p className="muted">When you reserve or chip in on a friend’s gift, it shows up here so you don’t forget.</p>
+          <p className="meta-text">When you reserve or chip in on a friend’s gift, it shows up here so you don’t forget</p>
         ) : (
           <div className="stack">
             {gifts.map((g) => (

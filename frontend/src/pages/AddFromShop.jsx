@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { normCurrency, parsePrice } from '../bookmarklet.js';
 import { ItemForm } from './ListPage.jsx';
+import { isListOpen, notifyListChanged, oneAddWindow } from '../sync.js';
 
 const LAST_LIST = 'bz:lastList';
 const httpOnly = (v) => (/^https?:\/\//i.test(v || '') ? v : '');
@@ -24,6 +25,24 @@ export default function AddFromShop() {
   const [listId, setListId] = useState('');
   const [done, setDone] = useState(null);
   const [error, setError] = useState('');
+  const [closeFailed, setCloseFailed] = useState(false);
+  const [listOpenElsewhere, setListOpenElsewhere] = useState(null); // null while asking the other tabs
+  // Opened by the + Bazhanka button as a small window over the shop? It stays open after adding; the
+  // person chooses "Open the list" or "Back to the shop", or simply presses the button on the next gift.
+  const inPopup = !!window.opener;
+  const closeWindow = () => {
+    window.close();
+    // If the browser refused, the page is still here a moment later.
+    setTimeout(() => setCloseFailed(true), 400);
+  };
+  // Keep a single + Bazhanka window: an older one whose gift is already added closes when a new one opens.
+  const doneRef = useRef(false);
+  doneRef.current = !!done;
+  useEffect(() => (inPopup ? oneAddWindow(() => doneRef.current) : undefined), [inPopup]);
+
+  // Popup blocked, so the button opened /add in the shop's own tab: go back to the product.
+  const backToShop = () => window.history.back();
+
 
   useEffect(() => {
     api('/wishlists').then(({ wishlists }) => {
@@ -46,7 +65,7 @@ export default function AddFromShop() {
         <h1>Add to a wishlist</h1>
         <div className="card empty">
           <p>You have no wishlists yet. Create one first, then press the button on the shop page again.</p>
-          <Link className="btn" to="/dashboard">Create a wishlist</Link>
+          <a className="btn" href="/dashboard" target={inPopup ? '_blank' : undefined} rel="noreferrer">Create a wishlist</a>
         </div>
       </div>
     );
@@ -55,14 +74,22 @@ export default function AddFromShop() {
   if (done) {
     return (
       <div className="page">
-        <h1>Added</h1>
+        <h1>Added ✓</h1>
         <div className="card stack">
           <p>“{done.title}” is now on <b>{done.list.title}</b>.</p>
-          <div className="row">
-            <Link className="btn" to={`/l/${done.list.slug}`}>Open the list</Link>
-            <button className="btn ghost" onClick={() => window.close()}>Back to the shop</button>
-          </div>
-          <p className="muted small">If this tab doesn’t close, just switch back to the shop tab.</p>
+          {inPopup && listOpenElsewhere && (
+            <p className="meta-text">Your list is already open in another tab — it’s updated there</p>
+          )}
+          {listOpenElsewhere !== null && <div className="row">
+            {/* In the small window: open the list in a normal tab and close this window — unless it is open already. */}
+            {!(inPopup && listOpenElsewhere) && (
+              <a className="btn" href={`/l/${done.list.slug}`} target={inPopup ? '_blank' : undefined} rel="noreferrer"
+                onClick={inPopup ? () => setTimeout(closeWindow, 150) : undefined}>Open the list</a>
+            )}
+            {inPopup && <button className={`btn ${listOpenElsewhere ? '' : 'ghost'}`} onClick={closeWindow}>Back to the shop</button>}
+            {!inPopup && window.history.length > 1 && <button className="btn ghost" onClick={backToShop}>Back to the shop</button>}
+          </div>}
+          {inPopup && closeFailed && <p className="muted small">You can close this window now.</p>}
         </div>
       </div>
     );
@@ -87,8 +114,10 @@ export default function AddFromShop() {
         onDone={(f) => {
           try { localStorage.setItem(LAST_LIST, listId); } catch { /* private mode */ }
           setDone({ title: f.title, list: chosen });
+          notifyListChanged(chosen.slug, f.url);
+          if (inPopup) isListOpen(chosen.slug).then(setListOpenElsewhere); else setListOpenElsewhere(false);
         }}
-        onCancel={() => window.history.length > 1 ? window.history.back() : window.close()}
+        onCancel={() => (inPopup ? window.close() : window.history.back())}
       />
     </div>
   );

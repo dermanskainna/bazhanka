@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, niceDate } from '../api.js';
-import { LinkIcon } from '../icons.jsx';
+import { LinkIcon, TrashIcon } from '../icons.jsx';
 
 function useMyLists() {
   const [lists, setLists] = useState([]);
@@ -54,7 +54,7 @@ function Overview() {
   return (
     <div className="page">
       <h1>Secret Santa</h1>
-      <p className="lead">Invite your group, Bazhanka draws the pairs. Everyone sees only the wishlist of the person they’re gifting.</p>
+      <p className="lead meta-text">Invite your group, Bazhanka draws the pairs. Everyone sees only the wishlist of the person they’re gifting</p>
       {error && <p className="error">{error}</p>}
 
       {groups?.length > 0 && (
@@ -119,9 +119,9 @@ function Group({ code }) {
     <div className="page">
       <div className="list-header">
         <span className="tag">Secret Santa</span>
-        <h1>{g.group.name}</h1>
-        <p className="muted">
-          {g.members.length} members{g.group.budget ? ` · budget ${g.group.budget}` : ''}{g.group.exchangeDate ? ` · exchange ${niceDate(g.group.exchangeDate)}` : ''}
+        <h1 className="santa-title">{g.group.name}</h1>
+        <p className="meta-text">
+          {g.members.length} {g.members.length === 1 ? 'member' : 'members'}{g.group.budget ? ` · Budget: ${g.group.budget}` : ''}{g.group.exchangeDate ? ` · Exchange: ${niceDate(g.group.exchangeDate)}` : ''}
         </p>
       </div>
       {error && <p className="error">{error}</p>}
@@ -132,8 +132,8 @@ function Group({ code }) {
           <h2>{g.giftee.name}</h2>
           {g.giftee.list ? (
             <Link className="btn" to={`/l/${g.giftee.list.slug}`}>See {g.giftee.name}’s wishlist</Link>
-          ) : <p className="muted">{g.giftee.name} hasn’t attached a wishlist yet. Check back later!</p>}
-          <p className="muted small">Keep it secret — nobody else knows who you’re gifting.</p>
+          ) : <p className="meta-text">{g.giftee.name} hasn’t attached a wishlist yet — check back later</p>}
+          <p className="meta-text">Keep it secret — nobody else knows who you’re gifting</p>
         </div>
       )}
 
@@ -149,7 +149,7 @@ function Group({ code }) {
         <>
           {!g.group.drawn && (
             <div className="card share">
-              <div><h3 className="share-title"><LinkIcon size={20} /> Invite people</h3><p className="muted small">Send this link to your group chat. Everyone needs to join before the draw.</p></div>
+              <div><h3 className="share-title"><LinkIcon size={20} /> Invite people</h3><p className="meta-text">Send this link to your group chat. Everyone needs to join before the draw</p></div>
               <div className="share-row">
                 <input readOnly value={invite} onFocus={(e) => e.target.select()} />
                 <button className="btn" onClick={async () => { try { await navigator.clipboard.writeText(invite); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* ignore */ } }}>{copied ? 'Copied' : 'Copy'}</button>
@@ -167,31 +167,34 @@ function Group({ code }) {
       )}
 
       <section>
-        <h2>Members</h2>
+        <h2 className="dash-title">Members</h2>
         <ul className="members">
           {g.members.map((m, i) => (
-            <li key={i}>{m.name}{m.isMe && ' (you)'} {m.hasList ? <span className="tag">has a wishlist</span> : <span className="muted small">no wishlist yet</span>}</li>
+            <li key={i}><span className="member-name">{m.name}</span>{m.isMe && <span className="meta-text"> (you)</span>} {m.hasList ? <span className="tag">has a wishlist</span> : <span className="meta-text">no wishlist yet</span>}</li>
           ))}
         </ul>
       </section>
 
       {g.isOwner && !g.group.drawn && (
         <div className="card stack">
-          <strong>Ready? Draw names when everyone has joined.</strong>
-          <p className="muted small">After the draw nobody can join or leave. You need at least 3 people.</p>
+          <h3>Ready? Draw names when everyone has joined</h3>
+          <p className="meta-text">After the draw nobody can join or leave. You need at least 3 people</p>
           <button className="btn" disabled={g.members.length < 3}
             onClick={() => confirm(`Draw names for ${g.members.length} people now?`) && run(() => api(`/santa/${code}/draw`, { method: 'POST' }))}>
             Draw names
           </button>
         </div>
       )}
-      <p className="center">
-        {g.isOwner ? (
-          <button className="link danger" onClick={async () => { if (confirm('Delete this group for everyone?')) { await api(`/santa/${code}`, { method: 'DELETE' }); navigate('/santa'); } }}>Delete group</button>
-        ) : g.isMember && !g.group.drawn ? (
-          <button className="link danger" onClick={() => run(() => api(`/santa/${code}/me`, { method: 'DELETE' }))}>Leave group</button>
-        ) : null}
-      </p>
+      {g.isOwner ? (
+        <div className="danger-zone">
+          <button className="btn danger-btn" onClick={async () => { if (confirm('Delete this group for everyone?')) { await api(`/santa/${code}`, { method: 'DELETE' }); navigate('/santa'); } }}><TrashIcon size={16} /> Delete group</button>
+          <small className="meta-text">Removes the group and the draw for everyone in it</small>
+        </div>
+      ) : g.isMember && !g.group.drawn ? (
+        <div className="danger-zone">
+          <button className="btn danger-btn" onClick={() => run(() => api(`/santa/${code}/me`, { method: 'DELETE' }))}>Leave group</button>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,8 +1,40 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, money, niceDate } from '../api.js';
+import { isOwnPhoto, uploadPhoto } from '../photo.js';
+import { answerListOpen, onListChanged, sameProduct } from '../sync.js';
+import BookmarkletButton from '../BookmarkletButton.jsx';
+import BarShortcut from '../BarShortcut.jsx';
 import { useSession } from '../session.jsx';
-import { GiftIcon, LockIcon, AsteriskIcon, LinkIcon } from '../icons.jsx';
+import { GiftIcon, LockIcon, AsteriskIcon, LinkIcon, CheckIcon, TrashIcon } from '../icons.jsx';
+
+// Set by /add once the "+ Bazhanka" browser button has been used in this browser.
+// Shown when the server could not read the shop page. Not reading a page is normal (many shops don't
+// allow it), so this is a friendly next step, not an error.
+// The button can be set up right here (no extra tab): it is draggable from this panel too.
+function ManualHelp() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="manual-help" role="status">
+      <span className="manual-help-icon"><CheckIcon size={16} /></span>
+      <div>
+        <p className="manual-help-title"><span className="script">Link added!</span> Now give it a name and a price.</p>
+        <p className="manual-help-tip">
+          <span className="tip-tag">Tip</span> the{' '}
+          <button type="button" className="tip-link" aria-expanded={open} onClick={() => setOpen((o) => !o)}>+ Bazhanka button</button>{' '}
+          can fill this in for you.
+        </p>
+        {open && (
+          <ol className="tip-steps">
+            <li>Show the bookmarks bar: <BarShortcut /></li>
+            <li>Drag this onto it: <BookmarkletButton /></li>
+            <li>Go back to the product in the shop and press it — the gift lands in this list, and this form closes</li>
+          </ol>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const emptyItem = { url: '', title: '', imageUrl: '', price: '', currency: 'UAH', note: '', chipIn: false };
 
@@ -18,6 +50,10 @@ export default function ListPage() {
 
   // Reload when the session changes (signed out -> signed in shows "reserved by me").
   useEffect(() => { if (user !== undefined) load(); }, [load, user]);
+  // A gift added from the "+ Bazhanka" window (or in another tab) shows up here without a reload.
+  useEffect(() => onListChanged(load, slug), [load, slug]);
+  // Lets the "+ Bazhanka" window know this list is already open here (it then won't open another tab).
+  useEffect(() => (data?.isOwner ? answerListOpen(slug) : undefined), [data?.isOwner, slug]);
 
   if (error) return <div className="page"><h1>Oops</h1><p>{error}</p><Link to="/">Go home</Link></div>;
   if (!data) return <div className="page muted">Loading…</div>;
@@ -52,15 +88,27 @@ function ItemMedia({ item }) {
 }
 
 // One numbered card in the "gift guide" grid. `children` are the actions under the caption.
-function GiftCard({ n, item, taken, stamp, children }) {
+// What a click on the photo or the title does: the owner edits the gift (`onEdit`), a guest opens the
+// product in the shop (new tab). Without either it is a plain block.
+function CardAction({ item, onEdit, className, label, children }) {
+  if (onEdit) return <button type="button" className={`${className} card-action`} onClick={onEdit} aria-label={label}>{children}</button>;
+  if (item.url) return <a className={`${className} card-action`} href={item.url} target="_blank" rel="noreferrer" aria-label={label}>{children}</a>;
+  return <div className={className}>{children}</div>;
+}
+
+function GiftCard({ n, item, taken, stamp, onEdit, children }) {
+  const clickable = !!onEdit || !!item.url;
+  const label = onEdit ? `Edit “${item.title}”` : `Open “${item.title}” in the shop`;
   return (
-    <article className={`gift ${taken ? 'taken' : ''}`}>
-      <div className="gift-frame">
+    <article className={`gift ${taken ? 'taken' : ''} ${clickable ? 'clickable' : ''}`}>
+      <CardAction item={item} onEdit={onEdit} className="gift-frame" label={label}>
         <span className="gift-no">{n}</span>
         <ItemMedia item={item} />
         {stamp && <span className="stamp">{stamp}</span>}
-      </div>
-      <h3 className="gift-name" title={item.title}>#{item.title}</h3>
+      </CardAction>
+      <h3 className="gift-name" title={item.title}>
+        {clickable ? <CardAction item={item} onEdit={onEdit} className="gift-name-action">#{item.title}</CardAction> : `#${item.title}`}
+      </h3>
       <div className="price">{item.price !== null ? money(item.price, item.currency) : '\u00a0'}</div>
       {item.chipIn && <span className="tag">Chip-in gift</span>}
       {item.note && <p className="note">{item.note}</p>}
@@ -74,7 +122,13 @@ function GiftCard({ n, item, taken, stamp, children }) {
 function OwnerView({ data, reload }) {
   const w = data.wishlist;
   const navigate = useNavigate();
-  const [editing, setEditing] = useState(null); // item id or 'new'
+  const [editing, setEditing] = useState(null); // 'new' while the add form is open; editing has its own page
+  const newItemUrl = useRef('');
+  // The gift pasted here could not be read, so it was added with the + Bazhanka button instead: this
+  // half-filled form is no longer needed (the list itself refreshes in ListPage).
+  useEffect(() => onListChanged((msg) => {
+    if (msg?.addedUrl && sameProduct(msg.addedUrl, newItemUrl.current)) setEditing(null);
+  }, w.slug), [w.slug]);
   const shareUrl = `${window.location.origin}/l/${w.slug}`;
   const [copied, setCopied] = useState(false);
 
@@ -98,7 +152,7 @@ function OwnerView({ data, reload }) {
       <div className="card share">
         <div>
           <h3 className="share-title"><LinkIcon size={20} /> Share this link with friends</h3>
-          <p className="muted small">Guests see which gifts are taken. You won’t — so the surprise stays a surprise.</p>
+          <p className="meta-text">Guests see which gifts are taken. You won’t — so the surprise stays a surprise</p>
         </div>
         <div className="share-row">
           <input readOnly value={shareUrl} onFocus={(e) => e.target.select()} />
@@ -114,37 +168,55 @@ function OwnerView({ data, reload }) {
       </div>
 
       {editing === 'new' && (
-        <ItemForm wishlistId={w.id} onDone={() => { setEditing(null); reload(); }} onCancel={() => setEditing(null)} />
+        <ItemForm wishlistId={w.id} onUrlChange={(u) => { newItemUrl.current = u; }}
+          onDone={() => { setEditing(null); reload(); }} onCancel={() => setEditing(null)} />
       )}
 
       {data.items.length === 0 && editing !== 'new' && (
-        <div className="card empty"><p>Your list is empty. Paste a link from Rozetka, Prom, Makeup, Yakaboo or any other shop — if the shop allows it we’ll fill in the rest, otherwise add the details by hand.</p></div>
+        <div className="card empty"><p className="meta-text">Your list is empty. Paste a link from Rozetka, Prom, Makeup, Yakaboo or any other shop and we’ll fill in the rest — or add a gift by hand, or with the <b style={{ whiteSpace: 'nowrap' }}>+ Bazhanka</b> button while you shop</p></div>
       )}
 
       <div className="guide">
-        {data.items.map((it, idx) => editing === it.id ? (
-          <ItemForm key={it.id} item={it} onDone={() => { setEditing(null); reload(); }} onCancel={() => setEditing(null)} />
-        ) : (
-          <GiftCard key={it.id} n={idx + 1} item={it}>
+        {data.items.map((it, idx) => (
+          <GiftCard key={it.id} n={idx + 1} item={it} onEdit={() => navigate(`/l/${w.slug}/edit/${it.id}`)}>
             <div className="row">
               {it.url && <a href={it.url} target="_blank" rel="noreferrer">Open in shop ↗</a>}
-              <button className="link" onClick={() => setEditing(it.id)}>Edit</button>
               <button className="link danger" onClick={() => removeItem(it.id)}>Remove</button>
             </div>
           </GiftCard>
         ))}
       </div>
-      <p className="center"><button className="link danger" onClick={removeList}>Delete this wishlist</button></p>
+      <div className="danger-zone">
+        <button className="btn danger-btn" onClick={removeList}><TrashIcon size={16} /> Delete this wishlist</button>
+        <small className="meta-text">Removes the list and all its gifts for you and your friends</small>
+      </div>
     </>
   );
 }
 
 // `initial` prefills a new item (used by the "+ Bazhanka" browser button page, /add).
-export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
+export function ItemForm({ wishlistId, item, initial, onDone, onCancel, onUrlChange }) {
   const [f, setF] = useState(item ? { ...emptyItem, ...item, price: item.price ?? '', imageUrl: item.imageUrl || '', url: item.url || '', note: item.note || '' } : { ...emptyItem, ...initial });
+  // '' | loading | ok | button | manual (shop not readable, or read but without a title) | missing (404) | bad (not a usable link)
   const [status, setStatus] = useState(initial?.title ? 'button' : '');
+  const titleRef = useRef(null);
+  useEffect(() => { onUrlChange?.(f.url); }, [f.url, onUrlChange]);
   const [error, setError] = useState('');
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
+  const [photo, setPhoto] = useState({ busy: false, error: '' });
+  const pickPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // choosing the same file again should work too
+    if (!file) return;
+    setPhoto({ busy: true, error: '' });
+    try {
+      const url = await uploadPhoto(file);
+      setF((cur) => ({ ...cur, imageUrl: url }));
+      setPhoto({ busy: false, error: '' });
+    } catch (err) {
+      setPhoto({ busy: false, error: err.message });
+    }
+  };
 
   const fetchPreview = async (url) => {
     if (!/^https?:\/\//i.test(url)) return;
@@ -160,10 +232,13 @@ export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
         price: cur.price || preview.price || '',
         currency: preview.currency || cur.currency,
       }));
-      setStatus(preview.title ? 'ok' : 'partial');
+      // A page without a product title is as good as unreadable for the person: same friendly hint.
+      if (preview.title) setStatus('ok');
+      else { setStatus('manual'); titleRef.current?.focus(); }
     } catch (err) {
-      setStatus('failed');
-      setError(err.message);
+      if (err.reason === 'bad_link') { setStatus('bad'); setError(err.message); return; }
+      setStatus(err.reason === 'not_found' ? 'missing' : 'manual');
+      titleRef.current?.focus();
     }
   };
 
@@ -186,30 +261,43 @@ export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
         <input type="url" value={f.url} placeholder="https://rozetka.com.ua/…" onChange={set('url')}
           onPaste={(e) => { const t = e.clipboardData.getData('text'); setTimeout(() => fetchPreview(t.trim()), 0); }}
           onBlur={() => !item && !f.title && fetchPreview(f.url)} autoFocus={!item} />
-        <small className="muted">
-          {status === 'loading' ? 'Looking up the product…' : status === 'ok' ? 'Filled in from the shop — check it below.' :
-            status === 'partial' ? 'The shop shared only part of the details — please complete them.' :
-            status === 'failed' ? 'Could not read that page — fill the item in by hand.' :
-            status === 'button' ? 'Filled in from the shop page you opened — check it below.' : 'Paste a link and we try to fill in title, photo and price.'}
-        </small>
+        {status === 'bad' ? <small className="field-error">{error}</small> : (
+          <small className="field-hint">
+            {status === 'loading' ? 'Looking up the product…' : status === 'ok' ? 'Filled in from the shop — check it below.' :
+              status === 'manual' ? '' :
+              status === 'missing' ? 'The shop says this page doesn’t exist. Check the link, or fill the item in by hand.' :
+              status === 'button' ? 'Filled in from the shop page you opened — check it below.' : 'Paste a shop link — we’ll fill in the title, photo and price for you.'}
+          </small>
+        )}
       </label>
-      {status === 'failed' && error && (
-        <p className="notice">
-          {error}. <Link to="/button">Use the “+ Bazhanka” browser button</Link> to fill it in from the shop page you have open.
-        </p>
-      )}
+      {status === 'manual' && <ManualHelp />}
       {f.imageUrl && <img className="preview-img" src={f.imageUrl} alt="" referrerPolicy="no-referrer" />}
-      <label>Title<input required value={f.title} onChange={set('title')} placeholder="What do you want?" /></label>
+      <label>Title<input ref={titleRef} required value={f.title} onChange={set('title')} placeholder="What do you want?" /></label>
       <div className="grid2">
         <label>Price<input inputMode="decimal" value={f.price} onChange={set('price')} placeholder="e.g. 1200" /></label>
         <label>Currency
           <select value={f.currency} onChange={set('currency')}>{['UAH', 'EUR', 'USD', 'PLN', 'GBP'].map((c) => <option key={c}>{c}</option>)}</select>
         </label>
       </div>
-      <label>Photo link (optional)<input type="url" value={f.imageUrl} onChange={set('imageUrl')} /></label>
+      <div className="photo-field">
+        <span className="field-label">Photo (optional)</span>
+        <div className="row">
+          <label className={`btn ghost small upload-btn ${photo.busy ? 'busy' : ''}`}>
+            <input type="file" accept="image/*" onChange={pickPhoto} disabled={photo.busy} />
+            {photo.busy ? 'Uploading…' : isOwnPhoto(f.imageUrl) ? 'Choose another photo' : f.imageUrl ? 'Use my own photo instead' : 'Upload my own photo'}
+          </label>
+          {f.imageUrl && !photo.busy && <button type="button" className="link danger" onClick={() => setF({ ...f, imageUrl: '' })}>Remove photo</button>}
+        </div>
+        {photo.error && <small className="field-error">{photo.error}</small>}
+        {isOwnPhoto(f.imageUrl) ? (
+          <small className="muted">Your own photo is used for this gift.</small>
+        ) : (
+          <input type="url" aria-label="Photo link" value={f.imageUrl} onChange={set('imageUrl')} placeholder="…or paste a link to a picture" />
+        )}
+      </div>
       <label>Note for friends (optional)<textarea rows={2} value={f.note} onChange={set('note')} placeholder="Size M, any colour except yellow" /></label>
       <label className="check"><input type="checkbox" checked={f.chipIn} onChange={set('chipIn')} /> Let several friends chip in on this gift</label>
-      {status !== 'failed' && error && <p className="error">{error}</p>}
+      {status !== 'bad' && error && <p className="error">{error}</p>}
       <div className="row"><button className="btn">{item ? 'Save' : 'Add to list'}</button><button type="button" className="btn ghost" onClick={onCancel}>Cancel</button></div>
     </form>
   );

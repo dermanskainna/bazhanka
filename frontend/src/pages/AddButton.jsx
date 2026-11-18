@@ -1,41 +1,80 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import BookmarkletButton from '../BookmarkletButton.jsx';
+import { bookmarkletCode } from '../bookmarklet.js';
 import { useSession } from '../session.jsx';
+import BarShortcut, { isMac } from '../BarShortcut.jsx';
+
+export const isMobile = (ua = navigator.userAgent) => /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+function CopyCode() {
+  const [state, setState] = useState('');
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(bookmarkletCode(window.location.origin));
+      setState('copied');
+    } catch {
+      setState('failed');
+    }
+  };
+  return (
+    <span>
+      <button type="button" className="btn ghost small" onClick={copy}>Copy the button code</button>
+      {state === 'copied' && <small className="meta-text"> Copied — now paste it as the bookmark’s address</small>}
+      {state === 'failed' && <small className="meta-text"> Your browser didn’t allow copying — try dragging the button</small>}
+    </span>
+  );
+}
 
 // Install page for the "+ Bazhanka" browser button.
 export default function AddButton() {
   const { user } = useSession();
+  const mobile = isMobile();
+
   return (
     <div className="page">
-      <h1>Add from any shop</h1>
-      <p>
-        Some shops don’t let our server read their pages, so a pasted link can’t fill in the details.
-        This button works in <b>your</b> browser instead: open a product in any shop, press the button,
-        and Bazhanka opens with the title, photo and price already filled in.
+      <h1>The fastest way to save a wish</h1>
+      <p className="meta-text intro-text">
+        See something you love while you browse a shop? One click on the <b style={{ whiteSpace: 'nowrap' }}>+ Bazhanka</b> button,
+        and it’s in your wishlist — title, photo and price included. No copying, no typing
       </p>
 
+      {mobile && (
+        <p className="notice meta-text">
+          On a phone there is no bookmarks bar for this button, so it can’t be used there. Paste a link into the gift form
+          instead, or set the button up on your computer
+        </p>
+      )}
+
       <div className="card stack">
-        <h3>1. Put the button on your bookmarks bar</h3>
-        <p className="muted small">
-          Drag it with the mouse onto the bookmarks bar. Don’t see the bar? Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>
-          (<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> on a Mac).
+        <h3>1. Show the bookmarks bar</h3>
+        <p className="meta-text">
+          Press <BarShortcut /> if you don’t see it under the address bar
+          {isMac && ' (in Safari it’s called the Favorites bar)'}
         </p>
+
+        <h3>2. Drag this button onto the bar</h3>
         <p><BookmarkletButton /></p>
+        <details className="meta-text">
+          <summary>Dragging doesn’t work?</summary>
+          <p>Add it by hand: <CopyCode /></p>
+          <p>
+            Then right-click the bookmarks bar, choose <b>Add page</b> (or <b>Add bookmark</b>), name it <i>+ Bazhanka</i> and
+            paste the code as its address
+          </p>
+        </details>
 
-        <h3>2. Open a product in any shop and press it</h3>
-        <p className="muted small">
-          A Bazhanka tab opens with the form filled in. Pick the wishlist, check the details and press <b>Add to list</b>.
-          If the shop page has no product details in it, fill in what is missing by hand.
+        <h3>3. On a product page, press + Bazhanka</h3>
+        <p className="meta-text">
+          Bazhanka opens with the gift already filled in. Choose a wishlist, check the details and press <b>Add to list</b> —
+          then carry on shopping
         </p>
-
-        <p className="muted small">
-          The button reads only the product details of the page you are looking at and passes them to the Bazhanka form;
-          nothing is saved until you press Add to list. On phones bookmark buttons are awkward: there, paste the link
-          into the form as usual.
+        <p className="meta-text">
+          Your privacy is safe: the button only picks up the product’s name, photo and price, and nothing is saved until you
+          add it yourself
         </p>
       </div>
 
-      <p><Link to={user ? '/dashboard' : '/signup?next=/button'}>{user ? '← My lists' : 'Create an account first'}</Link></p>
+      {!user && <p><Link to="/signup?next=/button">Create an account first</Link></p>}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import Admin from './pages/Admin.jsx';
 import Discover from './pages/Discover.jsx';
 import AddButton from './pages/AddButton.jsx';
 import AddFromShop from './pages/AddFromShop.jsx';
+import EditItem from './pages/EditItem.jsx';
 import Feedback from './Feedback.jsx';
 import { GiftIcon } from './icons.jsx';
 
@@ -23,6 +24,18 @@ function RequireUser({ children }) {
 export default function App() {
   const { user, logout, config } = useSession();
   const { pathname } = useLocation();
+  // The small window opened by the + Bazhanka button shows only the form: no menu, no feedback button.
+  const popup = pathname === '/add' && !!window.opener;
+  if (popup) {
+    return (
+      <div className="shell popup-shell">
+        <header className="topbar"><span className="brand"><GiftIcon size={20} /> Bazhanka</span></header>
+        <main className="app-bg">
+          <Routes><Route path="/add" element={<RequireUser><AddFromShop /></RequireUser>} /></Routes>
+        </main>
+      </div>
+    );
+  }
   return (
     <div className="shell">
       <header className="topbar">
@@ -32,10 +45,9 @@ export default function App() {
           {user ? (
             <>
               <NavLink to="/dashboard">My lists</NavLink>
-              <NavLink to="/ideas">Gift ideas</NavLink>
               <NavLink to="/santa">Secret Santa</NavLink>
               {user.isAdmin && <NavLink to="/admin">Stats</NavLink>}
-              <button className="link" onClick={logout}>Sign out</button>
+              <button className="nav-signout" onClick={logout}>Sign out</button>
             </>
           ) : user === null ? (
             <>
@@ -52,6 +64,7 @@ export default function App() {
           <Route path="/signup" element={<Auth mode="signup" />} />
           <Route path="/dashboard" element={<RequireUser><Dashboard /></RequireUser>} />
           <Route path="/l/:slug" element={<ListPage />} />
+          <Route path="/l/:slug/edit/:itemId" element={<RequireUser><EditItem /></RequireUser>} />
           <Route path="/button" element={<AddButton />} />
           <Route path="/add" element={<RequireUser><AddFromShop /></RequireUser>} />
           <Route path="/ideas" element={<RequireUser><Discover /></RequireUser>} />
