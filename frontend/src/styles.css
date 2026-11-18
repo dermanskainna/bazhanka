@@ -387,3 +387,13 @@ details.meta-text p { margin: 8px 0 0; }
 .tip-link { all: unset; cursor: pointer; color: var(--forest); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .tip-steps { margin: 10px 0 2px; padding-left: 1.3em; font-family: var(--mono); font-size: .78rem; color: #3d5a52; display: grid; gap: 8px; }
 .tip-steps .bookmarklet { padding: 6px 12px; font-size: .8rem; vertical-align: middle; }
+
+/* gift ideas form: kind of ideas */
+.novelty { border: 0; padding: 0; margin: 0; min-width: 0; }
+.novelty legend { padding: 0; margin-bottom: 6px; font-weight: 600; }
+.seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 640px) { .seg { grid-template-columns: 1fr; } }
+.seg-opt { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 6px; cursor: pointer; background: #fff; }
+.seg-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.seg-opt.on { border-color: var(--accent); background: var(--cream); }
+.seg-opt:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
