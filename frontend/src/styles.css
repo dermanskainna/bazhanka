@@ -296,3 +296,8 @@ section > .row.between { margin-top: 24px; }
 .idea-why { margin: 0; }
 .idea-meta { margin: 0 !important; }
 .page .row.between.idea-meta { margin: 0; }
+
+/* "+ Bazhanka" browser button (bookmarklet) */
+.bookmarklet { cursor: grab; text-transform: none; letter-spacing: .02em; font-size: .95rem; }
+.bookmarklet:active { cursor: grabbing; }
+kbd { font-family: var(--mono); font-size: .8em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: #fff; }

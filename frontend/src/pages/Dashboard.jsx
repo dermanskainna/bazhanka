@@ -81,6 +81,14 @@ export default function Dashboard() {
       </section>
 
       <section>
+        <div className="card cta">
+          <h3>Add from any shop in one click</h3>
+          <p className="muted">Put the “+ Bazhanka” button on your browser’s bookmarks bar. It fills in title, photo and price even where a pasted link can’t.</p>
+          <Link to="/button" className="btn ghost">Get the button</Link>
+        </div>
+      </section>
+
+      <section>
         <h2>Gifts I’m giving</h2>
         {gifts.length === 0 ? (
           <p className="muted">When you reserve or chip in on a friend’s gift, it shows up here so you don’t forget.</p>

@@ -21,6 +21,7 @@ Team: Inna Dermanska, Bohdana Skochynska, Ksenia Nimas (UCU).
 | Add an item by pasting a shop link: title, photo and price are filled in automatically when the shop allows it (JSON-LD / Open Graph); otherwise fill the item in by hand | owner view of a list |
 | Secret reservation: guests see "already reserved", the owner sees nothing | guest view of a list |
 | Chip in: several guests add amounts to one gift, with a progress bar | items marked "chip-in" |
+| Add from any shop with the “+ Bazhanka” browser button (bookmarklet), also where a pasted link can’t be read | `/button`, `/add` |
 | Secret Santa: invite link, the organiser draws names, each member sees only their giftee and their list | `/santa` |
 | "Gifts I'm giving" across all lists | `/dashboard` |
 | In-app feedback button and a metrics page for the validation goals | Feedback button, `/admin` |
@@ -207,4 +208,8 @@ sign-ups (goal 50), wishlists (20), % of guests who reserved (≥ 30%), % of gue
 - Reservation data is never sent to the list owner's browser; it's filtered on the server, not hidden in the UI.
 - Passwords are hashed with bcrypt; sessions are signed httpOnly, SameSite=Lax cookies (Secure in production).
 - The link-preview fetcher refuses private/internal addresses and limits redirects, time and size.
-- Some large shops block automated requests; then the form simply asks the user to fill the details in by hand.
+- Some shops block automated requests, and our link preview deliberately does not pretend to be a browser. For those shops
+  the form points to the **“+ Bazhanka” browser button** (`/button`): a bookmarklet that runs in the person's own browser on the
+  product page they already opened, reads the same product data (JSON-LD `Product`, Open Graph / `itemprop` tags, otherwise
+  the heading and the biggest picture) and opens `/add` with the form prefilled. The shop sees an ordinary visitor; nothing is
+  saved until the person presses *Add to list*. Code: `frontend/src/bookmarklet.js`, pages `AddButton.jsx` and `AddFromShop.jsx`.
