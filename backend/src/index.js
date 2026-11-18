@@ -3,7 +3,8 @@ import cookieParser from 'cookie-parser';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { migrate, pool } from './db.js';
+import { migrate, pool, query } from './db.js';
+import { rpcHandler } from './dbrpc.js';
 import { loadUser } from './auth.js';
 import authRoutes from './routes/auth.js';
 import wishlistRoutes from './routes/wishlists.js';
@@ -14,13 +15,21 @@ import discoverRoutes from './routes/discover.js';
 const app = express();
 app.set('trust proxy', 1); // behind Render/Fly HTTPS proxy
 app.disable('x-powered-by');
+// Signed SQL calls from the AWS edge function (see dbrpc.js). Registered before loadUser on purpose.
+if (process.env.DB_RPC_SERVER === 'true') {
+  app.post('/internal/db', express.json({ limit: '1mb' }), rpcHandler(pool));
+}
+
 app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
 app.use(loadUser);
 
+// Liveness without the database: readiness check of the edge function, which must not wake Aurora.
+app.get('/livez', (_req, res) => res.json({ ok: true }));
+
 app.get('/healthz', async (_req, res) => {
   try {
-    await pool.query('SELECT 1');
+    await query('SELECT 1');
     res.json({ ok: true });
   } catch {
     res.status(503).json({ ok: false });

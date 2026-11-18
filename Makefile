@@ -1,6 +1,14 @@
-SHELL := d:/Інна/Git/bin/bash.exe
-COMPOSE ?= docker compose -f infra/docker-compose.yml
 -include .env
+
+# Linux/macOS use the default /bin/sh. On Windows, make needs Git Bash: the default path below is
+# "C:\Program Files\Git" (short 8.3 name, no spaces). If Git is installed elsewhere, put the path in
+# .env, e.g.  GIT_BASH=d:/Git/bin/bash.exe
+ifeq ($(OS),Windows_NT)
+GIT_BASH ?= C:/PROGRA~1/Git/bin/bash.exe
+SHELL := $(GIT_BASH)
+endif
+
+COMPOSE ?= docker compose -f infra/docker-compose.yml
 
 PROJECT_NAME ?= bazhanka
 AWS_REGION ?= us-east-1
@@ -20,7 +28,9 @@ IMAGE_TAG ?= latest
 AWS_LAMBDA_ARCH ?= x86_64
 IMAGE_PLATFORM = $(if $(filter arm64,$(AWS_LAMBDA_ARCH)),linux/arm64,linux/amd64)
 STACK_TAGS = --tags "PROJECT_NAME=$(PROJECT_NAME)"
-CERT = AWS_CLI="$(AWS)" AWS_CERT_REGION=us-east-1 infra/certificate.sh
+# Extra flags for `cloudformation deploy` of the backend (aws-plan-backend sets --no-execute-changeset).
+CFN_DEPLOY_FLAGS ?=
+CERT = AWS_CLI="$(AWS)" AWS_CERT_REGION=us-east-1 sh infra/certificate.sh
 
 stack-output = $(AWS) cloudformation describe-stacks --stack-name $(1) \
 	--query 'Stacks[0].Outputs[?OutputKey==`$(2)`].OutputValue' --output text
@@ -47,7 +57,7 @@ define require-secrets
 	@test -n "$(AWS_JWT_SECRET)" || { echo "AWS_JWT_SECRET is empty in .env (min 16 chars)"; exit 1; }
 endef
 
-.PHONY: up up-build down logs aws-whoami aws-ecr aws-push aws-deploy-backend aws-deploy-frontend aws-deploy aws-frontend-cert aws-logs aws-url aws-destroy
+.PHONY: up up-build down logs aws-whoami aws-ecr aws-push aws-plan-backend aws-deploy-backend aws-deploy-frontend aws-deploy aws-frontend-cert aws-logs aws-logs-edge aws-url aws-db-snapshot aws-destroy
 
 up:
 	$(COMPOSE) up
@@ -100,6 +110,7 @@ aws-deploy-backend: aws-push
 			--template-file infra/backend.yml \
 			--capabilities CAPABILITY_IAM \
 			--no-fail-on-empty-changeset \
+			$(CFN_DEPLOY_FLAGS) \
 			$(STACK_TAGS) \
 			--parameter-overrides \
 				"ProjectName=$(PROJECT_NAME)" \
@@ -114,6 +125,16 @@ aws-deploy-backend: aws-push
 				"DonationLabel=$(or $(AWS_DONATION_LABEL),Support a volunteer cause)"
 	@$(MAKE) --no-print-directory aws-url
 
+# Dry run of the backend update: pushes the image, creates a change set WITHOUT applying it and lists
+# what would change. Check that no database resource (DbCluster, DbInstance, DbSubnetGroup) says
+# Replacement=True. Apply with `make aws-deploy-backend` (or delete the change set in the console).
+aws-plan-backend:
+	@$(MAKE) --no-print-directory aws-deploy-backend CFN_DEPLOY_FLAGS=--no-execute-changeset
+	@cs=$$($(AWS) cloudformation list-change-sets --stack-name $(APP_STACK) \
+			--query 'Summaries[-1].ChangeSetId' --output text | tr -d '[:space:]'); \
+		$(AWS) cloudformation describe-change-set --change-set-name "$$cs" \
+			--query 'Changes[].ResourceChange.[Action,LogicalResourceId,ResourceType,Replacement]' --output table
+
 aws-frontend-cert:
 	$(require-aws-credentials)
 	@test -n "$(AWS_FRONTEND_DOMAIN)" || { echo "AWS_FRONTEND_DOMAIN is empty in .env"; exit 1; }
@@ -124,6 +145,8 @@ aws-deploy-frontend:
 	@backend_domain=$$($(call stack-output,$(APP_STACK),FunctionUrlDomain) 2>/dev/null | tr -d '[:space:]'); \
 		test -n "$$backend_domain" -a "$$backend_domain" != "None" || { \
 			echo "No backend found — run: make aws-deploy-backend"; exit 1; }; \
+		edge_domain=$$($(call stack-output,$(APP_STACK),EdgeFunctionUrlDomain) 2>/dev/null | tr -d '[:space:]'); \
+		test "$$edge_domain" != "None" || edge_domain=""; \
 		domain=""; \
 		if [ -n "$(AWS_FRONTEND_DOMAIN)" ]; then \
 			cert=$$($(CERT) find "$(AWS_FRONTEND_DOMAIN)"); \
@@ -141,6 +164,7 @@ aws-deploy-frontend:
 			--parameter-overrides \
 				"ProjectName=$(PROJECT_NAME)" \
 				"BackendDomain=$$backend_domain" \
+				"EdgeDomain=$$edge_domain" \
 				"PricingPlan=$(or $(AWS_CLOUDFRONT_PLAN),PAY_AS_YOU_GO)" \
 				$$domain
 	@bucket=$$($(call stack-output,$(FRONTEND_STACK),BucketName) | tr -d '[:space:]'); \
@@ -166,6 +190,19 @@ aws-url:
 
 aws-logs:
 	$(AWS) logs tail /aws/lambda/$(PROJECT_NAME)-backend --follow
+
+aws-logs-edge:
+	$(AWS) logs tail /aws/lambda/$(PROJECT_NAME)-edge --follow
+
+# Manual snapshot of the Aurora cluster (kept until you delete it). Run before risky deploys.
+aws-db-snapshot:
+	$(require-aws-credentials)
+	@id="$(PROJECT_NAME)-db-manual-$$(date -u +%Y%m%d-%H%M%S)"; \
+		echo "Creating snapshot $$id..."; \
+		$(AWS) rds create-db-cluster-snapshot --db-cluster-identifier $(PROJECT_NAME)-db \
+			--db-cluster-snapshot-identifier "$$id" --query 'DBClusterSnapshot.Status' --output text && \
+		$(AWS) rds wait db-cluster-snapshot-available --db-cluster-snapshot-identifier "$$id" && \
+		echo "Snapshot $$id is available."
 
 aws-destroy:
 	$(require-aws-credentials)
