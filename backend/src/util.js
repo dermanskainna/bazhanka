@@ -9,11 +9,9 @@ export function randomCode(len = 8) {
 }
 
 export class HttpError extends Error {
-  // `reason` is an optional machine-readable code the frontend can react to (e.g. link preview).
-  constructor(status, message, reason) {
+  constructor(status, message) {
     super(message);
     this.status = status;
-    if (reason) this.reason = reason;
   }
 }
 

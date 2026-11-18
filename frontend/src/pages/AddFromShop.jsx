@@ -24,13 +24,6 @@ export default function AddFromShop() {
   const [listId, setListId] = useState('');
   const [done, setDone] = useState(null);
   const [error, setError] = useState('');
-  const [closeFailed, setCloseFailed] = useState(false);
-  const canClose = !!window.opener;
-  const backToShop = () => {
-    window.close();
-    // If the browser refused, the page is still here a moment later.
-    setTimeout(() => setCloseFailed(true), 300);
-  };
 
   useEffect(() => {
     api('/wishlists').then(({ wishlists }) => {
@@ -67,10 +60,9 @@ export default function AddFromShop() {
           <p>“{done.title}” is now on <b>{done.list.title}</b>.</p>
           <div className="row">
             <Link className="btn" to={`/l/${done.list.slug}`}>Open the list</Link>
-            {/* Browsers only let a page close a tab that a script opened, i.e. the one the button opened. */}
-            {canClose && <button className="btn ghost" onClick={backToShop}>Back to the shop</button>}
+            <button className="btn ghost" onClick={() => window.close()}>Back to the shop</button>
           </div>
-          {closeFailed && <p className="muted small">Your browser kept this tab open — just switch back to the shop tab.</p>}
+          <p className="muted small">If this tab doesn’t close, just switch back to the shop tab.</p>
         </div>
       </div>
     );

@@ -158,6 +158,16 @@ Resources:
               CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
               OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
             - !Ref "AWS::NoValue"
+          - !If
+            - HasEdge
+            - PathPattern: /api/admin/discover-run
+              TargetOriginId: edge
+              ViewerProtocolPolicy: redirect-to-https
+              AllowedMethods: [DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT]
+              CachedMethods: [GET, HEAD]
+              CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+              OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            - !Ref "AWS::NoValue"
           - PathPattern: /api/*
             TargetOriginId: api
             ViewerProtocolPolicy: redirect-to-https

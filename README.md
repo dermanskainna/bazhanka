@@ -19,7 +19,6 @@ Team: Inna Dermanska, Bohdana Skochynska, Ksenia Nimas (UCU).
 | Sign up / sign in (email + password, httpOnly session cookie) | `/signup`, `/signin` |
 | Create wishlists for an occasion and share them by link (copy or Telegram) | `/dashboard`, `/l/<code>` |
 | Add an item by pasting a shop link: title, photo and price are filled in automatically when the shop allows it (JSON-LD / Open Graph); otherwise fill the item in by hand | owner view of a list |
-| Own photo for a gift: upload from your computer or phone; the browser shrinks it to 1200 px (~100–300 KB) and it is stored in the database, no extra storage service | gift form |
 | Secret reservation: guests see "already reserved", the owner sees nothing | guest view of a list |
 | Chip in: several guests add amounts to one gift, with a progress bar | items marked "chip-in" |
 | Add from any shop with the “+ Bazhanka” browser button (bookmarklet), also where a pasted link can’t be read | `/button`, `/add` |
@@ -33,8 +32,9 @@ Signed-in users open **Gift ideas** (`/ideas`), describe what they like and get 
 
 How it works (`backend/src/discover.js`, `bedrock.js`, `routes/discover.js`):
 
-1. **Amazon Nova 2 Lite on Bedrock** with the built-in **web grounding** tool searches the web for shops that deliver in the user's country (`DISCOVER_COUNTRY`, default `UA`: searches in Ukrainian, `site:` queries on Ukrainian shops, Etsy/Amazon/eBay are excluded, AliExpress and Temu are allowed) and returns candidate products, each `direct` or `adjacent` (**Try something new**).
-2. **The model is never trusted for links.** Every candidate page is opened by the server. A card is kept only if the page opens, does not redirect to a home page, looks like a product page (JSON-LD Product / `og:type=product` / price) and its title agrees with what the model said. Title, photo and price shown on the card come from the real page, so the caption always matches the link. Fake hosts (`example.com`…), dead links and non-product pages are dropped; if too few survive, a second round asks again and tells the model which links were invalid. A shop that blocks bots is shown (marked "could not open automatically") only if the exact URL appeared in the search tool's own results.
+1. **Search engine (`DISCOVER_PROVIDER`).** Default when `SERPER_API_KEY` is set: **Google Shopping via [serper.dev](https://serper.dev)** (`gl=ua`, Ukrainian). A cheap Nova call without web search only turns the request into 4 Ukrainian product queries (3 direct, 1 adjacent = **Try something new**). Every card is a real Google Shopping listing, so title, link, shop, price and photo belong together and nothing can be invented. If there are too few listings (or partner shops exist), ordinary Google results (`site:partner.ua …`) are opened and checked as page-level fallback: the page must open, be a product page and agree with the title. Etsy/Amazon/eBay are excluded, AliExpress and Temu are allowed. Cost: about 5 Serper queries per fresh search (about $1 per 1000 queries, 2500 free). Set `AWS_SERPER_API_KEY` for `make aws-backend`. The older option `nova` (Bedrock web grounding) is kept for comparison but tends to invent links.
+   **Search options on `/ideas`:** a free-text description (several interests are fine), *kind of ideas* (`strict` = only what was asked, `mixed` = default, `surprise` = about half new things), recipient, occasion and a price range. The planner finds every interest, writes at least one query for each plus queries that combine two interests, and results are interleaved query by query so every interest is represented. Each card says which interest it was found for.
+2. **Admin → Stats → "AI search tester"** runs the real pipeline with any provider, without the daily limit and cache, and shows the result list plus the debug trail (planned queries, how many listings were dropped and why).
 3. Results are cached for 24 h per normalized query and each user has a daily limit of fresh searches (`DISCOVER_DAILY_LIMIT`, default 5), which keeps the AI bill predictable.
 4. **Partner shops** (admin page → *Gift ideas: partner shops*) are searched explicitly and ranked higher, always with a visible **Partner** mark. Ranking puts relevance first: a partner only moves up inside its relevance group, so an off-topic partner product never beats a direct match. Partners apply at read time, so pausing or adding one affects cached results at once.
 5. The funnel per partner (shown → clicked → added to a list) is counted in `discover_events` and shown in the admin page; it is the evidence to show a shop when selling placement.
@@ -54,21 +54,17 @@ Cost and AWS notes:
 ```
 backend/    Node.js + Express API, PostgreSQL (pg). Also serves the built frontend.
   src/index.js           server entry, static hosting, error handling
-  src/db.js              connection pool (or RPC mode on AWS) + schema, created automatically on start
-  src/dbrpc.js           AWS only: signed SQL calls from the edge Lambda to the main Lambda
+  src/db.js              connection pool + schema (created automatically on start)
   src/auth.js            JWT session cookie, password hashing in routes/auth.js
   src/preview.js         shop link → title/photo/price (with SSRF protection)
-  src/discover.js        gift ideas pipeline; src/bedrock.js is the Amazon Bedrock client
-  src/routes/            auth, wishlists/items/reservations, santa, discover, photos, feedback/stats
-  test/                  node:test suites (api, dbrpc, discover and photos need Postgres)
+  src/dbrpc.js           AWS only: signed SQL calls from the edge Lambda to the main Lambda
+  src/routes/            auth, wishlists/items/reservations, santa, feedback/stats
+  test/api.test.js       integration tests (needs Postgres)
 frontend/   React 18 + Vite single-page app
-  src/pages/             Home, Auth, Dashboard, ListPage (owner + guest), EditItem, Discover, Santa, Admin,
-                         AddButton (/button) and AddFromShop (/add) for the "+ Bazhanka" browser button
-  src/bookmarklet.js     the "+ Bazhanka" button code (runs on shop pages)
-  src/photo.js           shrinks and uploads own gift photos
+  src/pages/             Home, Auth, Dashboard, ListPage (owner + guest views), Santa, Admin
 infra/      Dockerfile, docker-compose.yml (local), render.yaml (Render),
             ecr.yml / backend.yml / frontend.yml / certificate.sh (AWS, driven by the Makefile)
-docs/       AWS deployment report, deploy report, user-testing report template, screenshots
+docs/       report template for the user-testing report
 ```
 
 ## Run locally
@@ -159,7 +155,7 @@ The production site runs on AWS in `us-east-1`, described by CloudFormation temp
 ```
 CloudFront ─┬─ /*  ───────────────────────────────▶ S3 (built frontend)
             ├─ /api/preview, /api/discover/*,
-            │  /api/admin/discover-check ─────────▶ Lambda bazhanka-edge (no VPC: internet, Bedrock)
+            │  /api/admin/discover-check|run ─────────▶ Lambda bazhanka-edge (no VPC: internet, Bedrock)
             │                                            │ SQL via lambda:Invoke (HMAC-signed)
             └─ other /api/*, /healthz ────────────▶ Lambda bazhanka-backend (in the VPC)
                                                          │ TCP 5432, SSL
