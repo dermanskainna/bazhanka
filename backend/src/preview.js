@@ -53,13 +53,14 @@ function findProductInJsonLd(node) {
 export function extractMetadata(html, pageUrl) {
   const $ = cheerio.load(html);
   const meta = (sel) => $(sel).attr('content')?.trim() || null;
-  const out = { title: null, image: null, price: null, currency: null };
+  const out = { title: null, image: null, price: null, currency: null, isProduct: false };
 
   $('script[type="application/ld+json"]').each((_, el) => {
     if (out.title && out.price) return;
     try {
       const product = findProductInJsonLd(JSON.parse($(el).contents().text()));
       if (!product) return;
+      out.isProduct = true;
       out.title ||= product.name || null;
       const img = Array.isArray(product.image) ? product.image[0] : product.image;
       out.image ||= (typeof img === 'object' ? img?.url : img) || null;
@@ -78,6 +79,9 @@ export function extractMetadata(html, pageUrl) {
   out.image ||= meta('meta[property="og:image"]') || meta('meta[property="og:image:url"]') || meta('meta[name="twitter:image"]');
   out.price ||= parsePrice(meta('meta[property="product:price:amount"]') || meta('meta[property="og:price:amount"]') || $('[itemprop="price"]').attr('content'));
   out.currency ||= meta('meta[property="product:price:currency"]') || meta('meta[property="og:price:currency"]') || $('[itemprop="priceCurrency"]').attr('content') || null;
+
+  // Product signals besides JSON-LD: Open Graph type or a machine-readable price.
+  if (/product/i.test(meta('meta[property="og:type"]') || '') || out.price) out.isProduct = true;
 
   if (out.image) {
     try { out.image = new URL(out.image, pageUrl).toString(); } catch { out.image = null; }

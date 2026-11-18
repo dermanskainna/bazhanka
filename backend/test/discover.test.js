@@ -3,8 +3,8 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { parseCandidates, rankOffers, findPartner, cacheKey, buildPrompt, normDomain, baseDomain } from '../src/discover.js';
-import { signRequest, signingKey, collectCitations } from '../src/bedrock.js';
+import { parseCandidates, rankOffers, findPartner, cacheKey, buildPrompt, normDomain, baseDomain, verifyCandidates, titlesAgree, isForeignMarketplace, isPlaceholderHost, normalizeUrl } from '../src/discover.js';
+import { signRequest, signingKey, collectCitations, collectToolInfo } from '../src/bedrock.js';
 
 const partners = [
   { id: 1, name: 'Partner Shop', domain: 'partner-shop.example.ua', boost: 3, active: true },
@@ -29,34 +29,34 @@ test('SigV4 request signing is well-formed and deterministic', () => {
 });
 
 test('parseCandidates tolerates fences/prose and drops junk and duplicates', () => {
-  const text = 'Here you go:\n```json\n[{"title":"A","url":"https://a.example/p?utm_source=x","fit":"direct","why":"ok"},' +
-    '{"title":"A again","url":"https://a.example/p"},{"title":"Bad","url":"javascript:alert(1)"},{"url":"https://b.example"},' +
-    '{"title":"B","url":"https://b.example/x","fit":"adjacent"}]\n```';
+  const text = 'Here you go:\n```json\n[{"title":"A","url":"https://a-shop.com/p?utm_source=x","fit":"direct","why":"ok"},' +
+    '{"title":"A again","url":"https://a-shop.com/p"},{"title":"Bad","url":"javascript:alert(1)"},{"url":"https://b-shop.com"},' +
+    '{"title":"B","url":"https://b-shop.com/x","fit":"adjacent"}]\n```';
   const out = parseCandidates(text);
   assert.deepEqual(out.map((o) => [o.title, o.fit]), [['A', 'direct'], ['B', 'adjacent']]);
-  assert.equal(out[0].url, 'https://a.example/p', 'tracking params stripped');
+  assert.equal(out[0].url, 'https://a-shop.com/p', 'tracking params stripped');
   assert.deepEqual(parseCandidates('no json here'), []);
   assert.deepEqual(parseCandidates('[broken'), []);
 });
 
 test('parseCandidates keeps a price only when it is a positive number', () => {
-  const out = parseCandidates('[{"title":"A","url":"https://a.example/1","price":1299.5,"currency":"uah"},{"title":"B","url":"https://b.example/1","price":"abc","currency":"zz"},{"title":"C","url":"https://c.example/1","price":null}]');
+  const out = parseCandidates('[{"title":"A","url":"https://a-shop.com/1","price":1299.5,"currency":"uah"},{"title":"B","url":"https://b-shop.com/1","price":"abc","currency":"zz"},{"title":"C","url":"https://c-shop.com/1","price":null}]');
   assert.deepEqual(out.map((o) => [o.seenPrice, o.seenCurrency]), [[1299.5, 'UAH'], [null, null], [null, null]]);
 });
 
 test('parseCandidates salvages complete items from a reply cut off mid-array', () => {
-  const text = 'Sure! [{"title":"A","url":"https://a.example/1","why":"has } brace"},{"title":"B","url":"https://b.example/2","fit":"adjacent"},{"title":"C","url":"https://c.exa';
+  const text = 'Sure! [{"title":"A","url":"https://a-shop.com/1","why":"has } brace"},{"title":"B","url":"https://b-shop.com/2","fit":"adjacent"},{"title":"C","url":"https://c.exa';
   const out = parseCandidates(text);
   assert.deepEqual(out.map((o) => o.title), ['A', 'B']);
   assert.equal(out[0].why, 'has } brace');
-  assert.deepEqual(parseCandidates('{"title":"Solo","url":"https://s.example/1"}').map((o) => o.title), ['Solo']);
+  assert.deepEqual(parseCandidates('{"title":"Solo","url":"https://s-shop.com/1"}').map((o) => o.title), ['Solo']);
 });
 
 test('collectCitations finds web sources in any response shape and dedupes', () => {
-  const a = { message: { content: [{ text: 'x', citationsContent: [{ location: { web: { url: 'https://a.example/1', domain: 'a.example' } } }] }] } };
-  const b = { message: { content: [{ text: 'x' }, { citationsContent: { citations: [{ location: { web: { url: 'https://b.example/2' } } }, { location: { web: { url: 'https://b.example/2' } } }] } }] } };
-  assert.deepEqual(collectCitations(a), [{ url: 'https://a.example/1', domain: 'a.example' }]);
-  assert.deepEqual(collectCitations(b), [{ url: 'https://b.example/2', domain: null }]);
+  const a = { message: { content: [{ text: 'x', citationsContent: [{ location: { web: { url: 'https://a-shop.com/1', domain: 'a.example' } } }] }] } };
+  const b = { message: { content: [{ text: 'x' }, { citationsContent: { citations: [{ location: { web: { url: 'https://b-shop.com/2' } } }, { location: { web: { url: 'https://b-shop.com/2' } } }] } }] } };
+  assert.deepEqual(collectCitations(a), [{ url: 'https://a-shop.com/1', domain: 'a.example' }]);
+  assert.deepEqual(collectCitations(b), [{ url: 'https://b-shop.com/2', domain: null }]);
   assert.deepEqual(collectCitations({ message: { content: [{ text: 'none' }] } }), []);
   assert.deepEqual(collectCitations(undefined), []);
 });
@@ -79,11 +79,11 @@ test('partner matching covers subdomains and ignores inactive partners in rankin
 test('ranking: relevance first, partner boost inside a group, adjacent items interleaved and labelled', () => {
   const offers = [
     { title: 'adj partner', url: 'https://partner-shop.example.ua/adj', fit: 'adjacent' },
-    { title: 'd1', url: 'https://x1.example/1', fit: 'direct' },
-    { title: 'd2', url: 'https://x2.example/2', fit: 'direct' },
+    { title: 'd1', url: 'https://x1-shop.com/1', fit: 'direct' },
+    { title: 'd2', url: 'https://x2-shop.com/2', fit: 'direct' },
     { title: 'd partner', url: 'https://partner-shop.example.ua/d', fit: 'direct' },
-    { title: 'd3', url: 'https://x3.example/3', fit: 'direct' },
-    { title: 'adj plain', url: 'https://x4.example/4', fit: 'adjacent' },
+    { title: 'd3', url: 'https://x3-shop.com/3', fit: 'direct' },
+    { title: 'adj plain', url: 'https://x4-shop.com/4', fit: 'adjacent' },
   ];
   const r = rankOffers(offers, partners);
   assert.equal(r.length, offers.length);
@@ -94,6 +94,52 @@ test('ranking: relevance first, partner boost inside a group, adjacent items int
   assert.equal(r.filter((o) => o.partner).length, 2);
   // Paid placement never lifts an adjacent item above a direct match.
   assert.ok(r.findIndex((o) => o.title === 'adj partner') > r.findIndex((o) => o.title === 'd1'));
+});
+
+test('placeholder hosts and foreign marketplaces are dropped at parse time', () => {
+  const out = parseCandidates(JSON.stringify([
+    { title: 'A', url: 'https://www.example.com/p/1' }, { title: 'B', url: 'https://shop.example/p' },
+    { title: 'C', url: 'https://www.etsy.com/listing/1/x' }, { title: 'D', url: 'https://www.amazon.com/dp/B0' },
+    { title: 'E', url: 'https://rozetka.com.ua/ua/p1/p1/' },
+  ]));
+  assert.deepEqual(out.map((o) => o.title), ['E']);
+  assert.ok(isPlaceholderHost('example.com') && isPlaceholderHost('a.test') && !isPlaceholderHost('rozetka.com.ua'));
+  assert.ok(isForeignMarketplace('www.etsy.com') && isForeignMarketplace('etsy.com') && !isForeignMarketplace('prom.ua') && !isForeignMarketplace('aliexpress.com') && !isForeignMarketplace('www.temu.com'));
+});
+
+test('titlesAgree and normalizeUrl', () => {
+  assert.ok(titlesAgree('Набір для кави Hario', 'Hario V60 набір для заварювання кави'));
+  assert.ok(!titlesAgree('Coffee grinder', 'Шкарпетки чоловічі'));
+  assert.equal(normalizeUrl('https://www.a.ua/x/?q=1#h'), 'a.ua/x');
+});
+
+test('collectToolInfo reads queries and urls from tool blocks', () => {
+  const r = collectToolInfo([{ toolUse: { input: { query: 'кава купити' } } }, { toolResult: { content: [{ text: 'see https://prom.ua/p1, and https://a.ua/x.' }] } }]);
+  assert.deepEqual(r.queries, ['кава купити']);
+  assert.deepEqual(r.urls.sort(), ['https://a.ua/x', 'https://prom.ua/p1']);
+});
+
+test('verifyCandidates uses page data and drops fake, dead and mismatched links', async () => {
+  const cands = ['ok', 'dead', 'home', 'nonprod', 'mismatch', 'blocked', 'blockedseen'].map((k) => ({ title: k === 'mismatch' ? 'Coffee grinder' : 'Coffee set', url: `https://shop-${k}.com.ua/p/${k}`, fit: 'direct', why: 'why', seenPrice: null, seenCurrency: null }));
+  const pages = {
+    ok: { title: 'Coffee set Hario', url: 'https://shop-ok.com.ua/p/ok', image: 'https://i/1.jpg', price: 900, currency: 'UAH', isProduct: true },
+    home: { title: 'Shop', url: 'https://shop-home.com.ua/', isProduct: true },
+    nonprod: { title: 'Blog about coffee set', url: 'https://shop-nonprod.com.ua/p/nonprod', isProduct: false },
+    mismatch: { title: 'Шкарпетки', url: 'https://shop-mismatch.com.ua/p/mismatch', isProduct: true },
+  };
+  const fetcher = async (u) => {
+    const k = u.split('/').pop();
+    if (k === 'dead') throw new Error('The shop answered with 404');
+    if (k.startsWith('blocked')) throw new Error('This shop does not allow automatic reading');
+    return pages[k];
+  };
+  const stats = {};
+  const out = await verifyCandidates(cands, { sourceUrls: new Set(['shop-blockedseen.com.ua/p/blockedseen']), fetcher }, stats);
+  assert.deepEqual(out.map((o) => o.url).sort(), ['https://shop-blockedseen.com.ua/p/blockedseen', 'https://shop-ok.com.ua/p/ok']);
+  const ok = out.find((o) => o.verified);
+  assert.equal(ok.title, 'Coffee set Hario'); assert.equal(ok.price, 900); assert.equal(ok.imageUrl, 'https://i/1.jpg');
+  assert.equal(out.find((o) => !o.verified).priceApprox, false);
+  assert.equal(stats.unreachable, 1); assert.equal(stats.redirectedHome, 1); assert.equal(stats.notProduct, 1); assert.equal(stats.titleMismatch, 1); assert.equal(stats.blocked, 1);
 });
 
 test('cache key ignores case, order and punctuation; budget is bucketed', () => {

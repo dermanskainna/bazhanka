@@ -218,21 +218,24 @@ button.link.danger:hover { color: var(--accent); }
 .inline-icon { vertical-align: -3px; margin-right: 4px; color: var(--accent); }
 .guide-bar h2, .guide-count { margin-top: 1.2em; }
 
-.guide { display: grid; grid-template-columns: repeat(3, 1fr); gap: 38px 30px; margin-top: 20px; padding: 0 6px; }
-@media (max-width: 900px) { .guide { grid-template-columns: repeat(2, 1fr); gap: 32px 22px; } }
-@media (max-width: 520px) { .guide { grid-template-columns: 1fr; } }
+.guide { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 38px 30px; margin-top: 20px; padding: 0 6px; }
+@media (max-width: 900px) { .guide { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px 22px; } }
+@media (max-width: 520px) { .guide { grid-template-columns: minmax(0, 1fr); } }
 .guide .item-form { grid-column: 1 / -1; }
 
 .gift { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.gift-frame { position: relative; aspect-ratio: 1; background: #fff9f7; border: 2px solid var(--accent); border-radius: 3px 5px 2px 6px / 5px 2px 6px 3px; padding: 18px; display: grid; place-items: center; }
+.gift-frame { position: relative; aspect-ratio: 1; background: #fff9f7; border: 2px solid var(--accent); border-radius: 3px 5px 2px 6px / 5px 2px 6px 3px; padding: 0; }
 .gift-frame::after { content: ""; position: absolute; inset: -5px -3px -3px -5px; border: 1.5px solid var(--accent); border-radius: 5px 2px 6px 3px / 3px 6px 2px 5px; opacity: .5; transform: rotate(-.6deg); pointer-events: none; }
 .gift-no { position: absolute; top: 4px; left: 10px; font-family: "Caveat", cursive; font-size: 1.6rem; line-height: 1; color: var(--accent); z-index: 1; }
-.gift-img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; mix-blend-mode: multiply; }
-.gift-img.ph { display: grid; place-items: center; width: 100%; height: 100%; color: var(--accent); opacity: .55; mix-blend-mode: normal; }
-.gift-name { font-family: "Caveat", cursive; font-size: 1.55rem; font-weight: 700; color: var(--accent); margin: 12px 0 0; line-height: 1.1; overflow-wrap: anywhere; }
-.gift .note { font-size: .85rem; }
+/* The frame is a fixed square; the picture is pinned inside it and scaled to fit, so a huge, tiny,
+   wide or tall photo can never change the size of the card. */
+.gift-img { position: absolute; inset: 18px; width: calc(100% - 36px); height: calc(100% - 36px); object-fit: contain; object-position: center; mix-blend-mode: multiply; }
+.gift-img.ph { display: grid; place-items: center; color: var(--accent); opacity: .55; mix-blend-mode: normal; }
+.gift-name { font-family: "Caveat", cursive; font-size: 1.55rem; font-weight: 700; color: var(--accent); margin: 12px 0 0; line-height: 1.1; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; min-height: 2.2em; }
+.gift .price { min-height: 1.6em; }
+.gift .note { font-size: .85rem; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .gift .tag { align-self: flex-start; }
-.gift-actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-top: 4px; width: 100%; }
+.gift-actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; margin-top: auto; padding-top: 4px; width: 100%; }
 .gift.taken .gift-img { filter: grayscale(1); opacity: .45; }
 .gift.taken .gift-name { opacity: .6; }
 .stamp { position: absolute; right: -8px; bottom: 14px; transform: rotate(-8deg); font-family: var(--mono); text-transform: uppercase; font-size: .68rem; font-weight: 700; letter-spacing: .1em; border: 2px solid var(--accent); color: var(--accent); background: #fff; padding: 3px 8px; border-radius: 3px; z-index: 2; }
@@ -284,7 +287,7 @@ section > .row.between { margin-top: 24px; }
 /* ---------- gift ideas (discover) ---------- */
 .chip-btn { font: inherit; font-size: .85rem; background: var(--cream); color: var(--text); border: 1px solid var(--line); border-radius: 99px; padding: 4px 12px; cursor: pointer; }
 .chip-btn:hover { border-color: var(--accent); color: var(--accent); }
-.ideas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 22px; margin-top: 14px; }
+.ideas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 22px; margin-top: 14px; align-items: stretch; }
 .idea-card { display: flex; flex-direction: column; gap: 8px; background: #fffaf8; border: 1.5px solid var(--accent); border-radius: 4px 6px 3px 5px / 6px 3px 5px 4px; padding: 12px; min-width: 0; }
 .idea-pic { aspect-ratio: 4 / 3; background: #fff; border-radius: 4px; display: grid; place-items: center; color: var(--accent); overflow: hidden; }
 .idea-pic img { width: 100%; height: 100%; object-fit: contain; }
@@ -292,8 +295,11 @@ section > .row.between { margin-top: 24px; }
 .badge { font-family: var(--mono); font-size: .66rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; background: var(--cream); color: var(--accent); }
 .badge.new { background: var(--forest); color: #fff; }
 .badge.partner { background: #fff; border: 1px dashed var(--muted); color: var(--muted); }
-.idea-title { font-family: var(--sans) !important; font-size: .98rem !important; font-weight: 600; color: var(--text) !important; line-height: 1.3 !important; overflow-wrap: anywhere; margin: 0; }
-.idea-why { margin: 0; }
+.idea-body { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.idea-foot { display: flex; flex-direction: column; gap: 8px; margin-top: auto; padding-top: 4px; }
+.idea-foot .btn, .idea-foot .status { width: 100%; text-align: center; justify-content: center; box-sizing: border-box; min-height: 38px; display: flex; align-items: center; }
+.idea-title { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 3.9em; font-family: var(--sans) !important; font-size: .98rem !important; font-weight: 600; color: var(--text) !important; line-height: 1.3 !important; overflow-wrap: anywhere; margin: 0; }
+.idea-why { margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .idea-meta { margin: 0 !important; }
 .page .row.between.idea-meta { margin: 0; }
 

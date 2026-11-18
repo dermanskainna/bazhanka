@@ -50,18 +50,22 @@ function IdeaCard({ offer, listId, hasLists, onAdded }) {
           ? <img src={offer.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" />
           : <GiftIcon size={40} />}
       </div>
-      <Badge offer={offer} />
-      <h3 className="idea-title">{offer.title}</h3>
-      {offer.why && <p className="muted small idea-why">{offer.why}</p>}
-      {offer.verified === false && <p className="muted small idea-why">We could not check this link automatically — please verify price and details in the shop.</p>}
-      <div className="row between idea-meta">
-        <span className="price" title={offer.priceApprox ? 'Price seen in search results — please check it in the shop' : undefined}>{offer.price ? `${offer.priceApprox ? '≈ ' : ''}${money(offer.price, offer.currency || 'UAH')}` : ''}</span>
-        <a href={offer.url} target="_blank" rel="noreferrer noopener sponsored" onClick={trackClick} className="small">{host} ↗</a>
+      <div className="idea-body">
+        <Badge offer={offer} />
+        <h3 className="idea-title" title={offer.title}>{offer.title}</h3>
+        {offer.why && <p className="muted small idea-why">{offer.why}</p>}
+        {offer.verified === false && <p className="muted small idea-why">We could not open this shop automatically — please check price and details there.</p>}
       </div>
-      {state === 'added'
-        ? <span className="status mine">Added to your list</span>
-        : <button className="btn small" disabled={!hasLists || state === 'adding'} onClick={add}>{state === 'adding' ? 'Adding…' : '+ Add to wishlist'}</button>}
-      {error && <p className="error small">{error}</p>}
+      <div className="idea-foot">
+        <div className="row between idea-meta">
+          <span className="price" title={offer.priceApprox ? 'Price seen in search results — please check it in the shop' : undefined}>{offer.price ? `${offer.priceApprox ? '≈ ' : ''}${money(offer.price, offer.currency || 'UAH')}` : ''}</span>
+          <a href={offer.url} target="_blank" rel="noreferrer noopener sponsored" onClick={trackClick} className="small">{host} ↗</a>
+        </div>
+        {state === 'added'
+          ? <span className="status mine">Added to your list ✓</span>
+          : <button className="btn small" disabled={!hasLists || state === 'adding'} onClick={add}>{state === 'adding' ? 'Adding…' : '+ Add to wishlist'}</button>}
+        {error && <p className="error small">{error}</p>}
+      </div>
     </article>
   );
 }
