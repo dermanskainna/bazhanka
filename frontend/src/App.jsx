@@ -24,6 +24,18 @@ function RequireUser({ children }) {
 export default function App() {
   const { user, logout, config } = useSession();
   const { pathname } = useLocation();
+  // The small window opened by the + Bazhanka button shows only the form: no menu, no feedback button.
+  const popup = pathname === '/add' && !!window.opener;
+  if (popup) {
+    return (
+      <div className="shell popup-shell">
+        <header className="topbar"><span className="brand"><GiftIcon size={20} /> Bazhanka</span></header>
+        <main className="app-bg">
+          <Routes><Route path="/add" element={<RequireUser><AddFromShop /></RequireUser>} /></Routes>
+        </main>
+      </div>
+    );
+  }
   return (
     <div className="shell">
       <header className="topbar">

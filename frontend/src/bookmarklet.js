@@ -201,8 +201,14 @@ function grab(origin) {
     if (out.price) q.set('price', out.price.slice(0, 40));
     if (out.currency) q.set('currency', out.currency.slice(0, 8));
     var target = origin + '/add?' + q.toString();
-    var w = window.open(target, '_blank');
-    if (!w) location.href = target;
+    // A small window over the shop (like "Save" buttons do), not a new tab: it closes itself after the
+    // gift is added. One name, so pressing the button again reuses the same window.
+    var W = 560, H = Math.max(520, Math.min(860, (screen.availHeight || 900) - 80));
+    var left = Math.max(0, (window.screenX || 0) + (window.outerWidth || 1200) - W - 40);
+    var top = Math.max(0, (window.screenY || 0) + 60);
+    var w = window.open(target, 'bazhanka-add', 'popup=yes,width=' + W + ',height=' + H + ',left=' + left + ',top=' + top);
+    if (!w) location.href = target; // popup blocked: open in this tab, /add then offers "Back to the shop"
+    else try { w.focus(); } catch (e) { /* ignore */ }
   };
 
   if (looksLikeProduct) send();

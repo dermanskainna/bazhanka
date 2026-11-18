@@ -113,8 +113,8 @@ export default function AddButton() {
 
         <h3>3. Found something you love? Press it</h3>
         <p className="muted small">
-          Bazhanka opens in a new tab with everything already filled in. Choose a wishlist, take a quick look
-          and press <b>Add to list</b> — that’s it!
+          A small Bazhanka window opens over the shop with everything already filled in. Choose a wishlist,
+          take a quick look and press <b>Add to list</b> — the window closes by itself and you keep shopping.
         </p>
 
         <p className="muted small">

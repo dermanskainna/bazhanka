@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { normCurrency, parsePrice } from '../bookmarklet.js';
 import { ItemForm } from './ListPage.jsx';
@@ -25,12 +25,21 @@ export default function AddFromShop() {
   const [done, setDone] = useState(null);
   const [error, setError] = useState('');
   const [closeFailed, setCloseFailed] = useState(false);
-  const canClose = !!window.opener;
-  const backToShop = () => {
+  // Opened by the + Bazhanka button as a small window over the shop? Then it closes itself when done.
+  const inPopup = !!window.opener;
+  const closeWindow = () => {
     window.close();
     // If the browser refused, the page is still here a moment later.
-    setTimeout(() => setCloseFailed(true), 300);
+    setTimeout(() => setCloseFailed(true), 400);
   };
+  // Popup blocked, so the button opened /add in the shop's own tab: go back to the product.
+  const backToShop = () => window.history.back();
+
+  useEffect(() => {
+    if (!done || !inPopup) return undefined;
+    const t = setTimeout(closeWindow, 1300);
+    return () => clearTimeout(t);
+  }, [done, inPopup]);
 
   useEffect(() => {
     api('/wishlists').then(({ wishlists }) => {
@@ -53,7 +62,7 @@ export default function AddFromShop() {
         <h1>Add to a wishlist</h1>
         <div className="card empty">
           <p>You have no wishlists yet. Create one first, then press the button on the shop page again.</p>
-          <Link className="btn" to="/dashboard">Create a wishlist</Link>
+          <a className="btn" href="/dashboard" target={inPopup ? '_blank' : undefined} rel="noreferrer">Create a wishlist</a>
         </div>
       </div>
     );
@@ -62,15 +71,15 @@ export default function AddFromShop() {
   if (done) {
     return (
       <div className="page">
-        <h1>Added</h1>
+        <h1>Added ✓</h1>
         <div className="card stack">
           <p>“{done.title}” is now on <b>{done.list.title}</b>.</p>
+          {inPopup && !closeFailed && <p className="muted small">This window closes by itself…</p>}
+          {inPopup && closeFailed && <p className="muted small">You can close this window now.</p>}
           <div className="row">
-            <Link className="btn" to={`/l/${done.list.slug}`}>Open the list</Link>
-            {/* Browsers only let a page close a tab that a script opened, i.e. the one the button opened. */}
-            {canClose && <button className="btn ghost" onClick={backToShop}>Back to the shop</button>}
+            <a className="btn" href={`/l/${done.list.slug}`} target={inPopup ? '_blank' : undefined} rel="noreferrer">Open the list</a>
+            {!inPopup && window.history.length > 1 && <button className="btn ghost" onClick={backToShop}>Back to the shop</button>}
           </div>
-          {closeFailed && <p className="muted small">Your browser kept this tab open — just switch back to the shop tab.</p>}
         </div>
       </div>
     );
@@ -96,7 +105,7 @@ export default function AddFromShop() {
           try { localStorage.setItem(LAST_LIST, listId); } catch { /* private mode */ }
           setDone({ title: f.title, list: chosen });
         }}
-        onCancel={() => window.history.length > 1 ? window.history.back() : window.close()}
+        onCancel={() => (inPopup ? window.close() : window.history.back())}
       />
     </div>
   );

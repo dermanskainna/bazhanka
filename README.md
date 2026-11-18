@@ -216,5 +216,5 @@ sign-ups (goal 50), wishlists (20), % of guests who reserved (≥ 30%), % of gue
 - Some shops block automated requests, and our link preview deliberately does not pretend to be a browser. For those shops
   the form points to the **“+ Bazhanka” browser button** (`/button`): a bookmarklet that runs in the person's own browser on the
   product page they already opened, reads the same product data (JSON-LD `Product`, Open Graph / `itemprop` tags, otherwise
-  the heading and the biggest picture) and opens `/add` with the form prefilled. The shop sees an ordinary visitor; nothing is
+  the heading and the biggest picture) and opens `/add` with the form prefilled in a small window over the shop, which closes itself once the gift is added. The shop sees an ordinary visitor; nothing is
   saved until the person presses *Add to list*. Code: `frontend/src/bookmarklet.js`, pages `AddButton.jsx` and `AddFromShop.jsx`.
