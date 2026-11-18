@@ -76,7 +76,7 @@ export default function App() {
       </main>
       {config.donationUrl && (
         <footer className="footer">
-          <span>Bazhanka is free and made by three students at UCU</span>
+          <span>Bazhanka · wishlists without duplicate gifts</span>
           <a className="support-link" href={config.donationUrl} target="_blank" rel="noreferrer"><HeartIcon size={15} /> {config.donationLabel}</a>
         </footer>
       )}
