@@ -129,8 +129,12 @@ test('edge function serves preview and gift ideas with the database reached over
   // Preview is served by the edge function; a bad link is answered without touching the shop.
   const bad = await e('POST', '/api/preview', { url: 'not a link' });
   assert.equal(bad.status, 400);
+  assert.equal(bad.body.reason, 'bad_link', 'the form can tell a bad link from a shop that blocks us');
   const priv = await e('POST', '/api/preview', { url: 'http://127.0.0.1:9001/2018-06-01/runtime/invocation/next' });
   assert.equal(priv.status, 400, 'SSRF guard still blocks the Lambda runtime API');
+  const gone = await e('POST', '/api/preview', { url: 'https://nonexistent-shop.invalid/item' });
+  assert.equal(gone.status, 422);
+  assert.equal(gone.body.reason, 'unreachable');
 
   assert.ok(invokes > before, 'queries went through the fake Lambda');
 

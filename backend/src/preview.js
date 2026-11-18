@@ -17,8 +17,8 @@ function isPrivateIp(ip) {
 
 async function assertPublicHost(hostname) {
   const addrs = await dns.lookup(hostname, { all: true }).catch(() => []);
-  if (!addrs.length) throw new HttpError(400, 'Could not reach that shop');
-  if (addrs.some((a) => isPrivateIp(a.address))) throw new HttpError(400, 'That address is not allowed');
+  if (!addrs.length) throw new HttpError(422, 'Could not reach that shop', 'unreachable');
+  if (addrs.some((a) => isPrivateIp(a.address))) throw new HttpError(400, 'That address is not allowed', 'bad_link');
 }
 
 function parsePrice(v) {
@@ -86,6 +86,8 @@ export function extractMetadata(html, pageUrl) {
   if (out.image) {
     try { out.image = new URL(out.image, pageUrl).toString(); } catch { out.image = null; }
   }
+  // JSON-LD strings sometimes carry HTML entities ("Lay&#39;s"); let the HTML parser decode them.
+  if (out.title && /&[#a-z0-9]+;/i.test(out.title)) out.title = cheerio.load(`<p>${out.title.replace(/</g, '&lt;')}</p>`)('p').text();
   if (out.title) out.title = out.title.replace(/\s+/g, ' ').slice(0, 300);
   if (out.currency) out.currency = String(out.currency).toUpperCase().slice(0, 3);
   if (out.currency === 'ГРН') out.currency = 'UAH';
@@ -97,9 +99,9 @@ export async function fetchPreview(rawUrl) {
   try {
     url = new URL(rawUrl);
   } catch {
-    throw new HttpError(400, 'That does not look like a link');
+    throw new HttpError(400, 'That does not look like a link', 'bad_link');
   }
-  if (!['http:', 'https:'].includes(url.protocol)) throw new HttpError(400, 'Only http(s) links are supported');
+  if (!['http:', 'https:'].includes(url.protocol)) throw new HttpError(400, 'Only http(s) links are supported', 'bad_link');
 
   // Follow redirects manually so every hop is checked against private networks.
   let current = url;
@@ -117,26 +119,28 @@ export async function fetchPreview(rawUrl) {
     }).catch(() => null);
     // 422, not 5xx: a shop that blocks or ignores us is an expected case, and the error handler
     // hides the message of every 5xx behind "Something went wrong on our side".
-    if (!res) throw new HttpError(422, 'The shop did not respond — fill the item in by hand');
+    if (!res) throw new HttpError(422, 'The shop did not respond — fill the item in by hand', 'unreachable');
     if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
       try {
         current = new URL(res.headers.get('location'), current);
       } catch {
-        throw new HttpError(422, 'The shop sent a broken redirect — fill the item in by hand');
+        throw new HttpError(422, 'The shop sent a broken redirect — fill the item in by hand', 'unreadable');
       }
-      if (!['http:', 'https:'].includes(current.protocol)) throw new HttpError(422, 'The shop redirected somewhere unsupported — fill the item in by hand');
+      if (!['http:', 'https:'].includes(current.protocol)) throw new HttpError(422, 'The shop redirected somewhere unsupported — fill the item in by hand', 'unreadable');
       continue;
     }
     break;
   }
-  if (res.status >= 300 && res.status < 400) throw new HttpError(422, 'The shop redirected too many times — fill the item in by hand');
+  if (res.status >= 300 && res.status < 400) throw new HttpError(422, 'The shop redirected too many times — fill the item in by hand', 'unreadable');
   if (!res.ok) {
     const blocked = res.status === 401 || res.status === 403 || res.status === 429;
+    const gone = res.status === 404 || res.status === 410;
     throw new HttpError(422, blocked
       ? 'This shop does not allow automatic reading of its pages — fill the item in by hand'
-      : `The shop answered with ${res.status} — fill the item in by hand`);
+      : `The shop answered with ${res.status} — fill the item in by hand`,
+    blocked ? 'blocked' : gone ? 'not_found' : 'unreadable');
   }
-  if (!res.body) throw new HttpError(422, 'The shop returned an empty page — fill the item in by hand');
+  if (!res.body) throw new HttpError(422, 'The shop returned an empty page — fill the item in by hand', 'unreadable');
 
   // Read at most 2 MB.
   let html;
@@ -153,7 +157,7 @@ export async function fetchPreview(rawUrl) {
     reader.cancel().catch(() => {});
     html = Buffer.concat(chunks).toString('utf8');
   } catch {
-    throw new HttpError(422, 'Could not read the shop page — fill the item in by hand');
+    throw new HttpError(422, 'Could not read the shop page — fill the item in by hand', 'unreadable');
   }
   return { url: httpUrl(current.toString()) || current.toString(), ...extractMetadata(html, current) };
 }

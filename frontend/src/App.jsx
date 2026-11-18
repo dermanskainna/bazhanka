@@ -9,6 +9,7 @@ import Admin from './pages/Admin.jsx';
 import Discover from './pages/Discover.jsx';
 import AddButton from './pages/AddButton.jsx';
 import AddFromShop from './pages/AddFromShop.jsx';
+import EditItem from './pages/EditItem.jsx';
 import Feedback from './Feedback.jsx';
 import { GiftIcon } from './icons.jsx';
 
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="/signup" element={<Auth mode="signup" />} />
           <Route path="/dashboard" element={<RequireUser><Dashboard /></RequireUser>} />
           <Route path="/l/:slug" element={<ListPage />} />
+          <Route path="/l/:slug/edit/:itemId" element={<RequireUser><EditItem /></RequireUser>} />
           <Route path="/button" element={<AddButton />} />
           <Route path="/add" element={<RequireUser><AddFromShop /></RequireUser>} />
           <Route path="/ideas" element={<RequireUser><Discover /></RequireUser>} />

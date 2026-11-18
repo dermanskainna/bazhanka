@@ -158,6 +158,16 @@ CREATE TABLE IF NOT EXISTS discover_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Own gift photos (see routes/photos.js); items point at them with image_url = '/api/photos/<key>'.
+CREATE TABLE IF NOT EXISTS photos (
+  key TEXT PRIMARY KEY,
+  owner_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  mime TEXT NOT NULL,
+  data BYTEA NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_photos_owner ON photos(owner_id, created_at);
+
 ALTER TABLE items ADD COLUMN IF NOT EXISTS source TEXT;  -- e.g. 'discover', 'discover:partner'
 
 CREATE INDEX IF NOT EXISTS idx_runs_user ON discover_runs(user_id, created_at);
