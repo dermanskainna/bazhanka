@@ -170,7 +170,7 @@ function Group({ code }) {
         <h2 className="dash-title">Members</h2>
         <ul className="members">
           {g.members.map((m, i) => (
-            <li key={i}>{m.name}{m.isMe && ' (you)'} {m.hasList ? <span className="tag">has a wishlist</span> : <span className="meta-text">no wishlist yet</span>}</li>
+            <li key={i}><span className="member-name">{m.name}</span>{m.isMe && <span className="meta-text"> (you)</span>} {m.hasList ? <span className="tag">has a wishlist</span> : <span className="meta-text">no wishlist yet</span>}</li>
           ))}
         </ul>
       </section>

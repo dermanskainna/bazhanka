@@ -370,3 +370,11 @@ details.meta-text p { margin: 8px 0 0; }
 .lead.meta-text { max-width: none; }
 /* Secret Santa group name, like a wishlist title */
 .santa-title { font-family: "Italiana", Georgia, serif; font-weight: 400; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); font-size: clamp(2rem, 6vw, 3rem); line-height: 1.05; margin: .15em 0; overflow-wrap: anywhere; }
+/* Small notes next to field labels: "(optional)", "(or who is it for)" */
+.label-note { font-family: var(--mono); font-size: .7rem; letter-spacing: .02em; text-transform: none; color: var(--muted); font-weight: 400; }
+/* Suggestion chips on Gift ideas */
+.chip-btn { font-family: var(--mono); font-size: .74rem; letter-spacing: .02em; }
+/* Secret Santa members: names in Caveat like other names on the site */
+.members li { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.member-name { font-family: "Caveat", cursive; font-size: 1.45rem; font-weight: 700; color: var(--accent); line-height: 1.1; }
+.members { list-style: none; padding-left: 0; }
