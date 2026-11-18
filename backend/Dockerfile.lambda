@@ -3,7 +3,7 @@ COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt
 
 ENV NODE_ENV=production \
     PORT=3000 \
-    AWS_LWA_READINESS_CHECK_PATH=/healthz \
+    AWS_LWA_READINESS_CHECK_PATH=/ping \
     AWS_LWA_READINESS_CHECK_PORT=3000
 
 WORKDIR /app

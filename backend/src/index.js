@@ -14,6 +14,16 @@ import discoverRoutes from './routes/discover.js';
 const app = express();
 app.set('trust proxy', 1); // behind Render/Fly HTTPS proxy
 app.disable('x-powered-by');
+
+// Start listening immediately and run the migration in the background. On Lambda the init phase is
+// limited to 10 s and a paused Aurora cluster needs 5-15 s to wake up, so waiting for the database
+// before listening makes cold starts time out. /ping does not touch the database; every other
+// request waits for the migration (which also wakes the database).
+const ready = migrate();
+ready.catch((e) => { console.error('migration failed', e); process.exit(1); });
+app.get('/ping', (_req, res) => res.type('text').send('ok'));
+app.use((_req, res, next) => ready.then(() => next(), () => res.status(503).json({ error: 'Starting up, try again' })));
+
 app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
 app.use(loadUser);
@@ -50,5 +60,4 @@ app.use((err, _req, res, _next) => {
 });
 
 const port = Number(process.env.PORT || 3000);
-await migrate();
 app.listen(port, () => console.log(`Bazhanka listening on :${port}`));
