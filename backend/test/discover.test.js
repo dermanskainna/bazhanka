@@ -104,7 +104,7 @@ test('placeholder hosts and foreign marketplaces are dropped at parse time', () 
   ]));
   assert.deepEqual(out.map((o) => o.title), ['E']);
   assert.ok(isPlaceholderHost('example.com') && isPlaceholderHost('a.test') && !isPlaceholderHost('rozetka.com.ua'));
-  assert.ok(isForeignMarketplace('www.etsy.com') && isForeignMarketplace('etsy.com') && !isForeignMarketplace('prom.ua'));
+  assert.ok(isForeignMarketplace('www.etsy.com') && isForeignMarketplace('etsy.com') && !isForeignMarketplace('prom.ua') && !isForeignMarketplace('aliexpress.com') && !isForeignMarketplace('www.temu.com'));
 });
 
 test('titlesAgree and normalizeUrl', () => {

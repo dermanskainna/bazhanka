@@ -47,7 +47,7 @@ export const REGIONS = {
 export const country = () => (REGIONS[process.env.DISCOVER_COUNTRY] ? process.env.DISCOVER_COUNTRY : 'UA');
 
 // Foreign marketplaces that dominated the results for Ukrainian users and are not useful gifts there.
-const FOREIGN_MARKETPLACE = /(^|\.)(etsy|ebay|aliexpress|temu|wish|shein|pinterest|amazon|walmart|wayfair)\.[a-z.]+$/;
+const FOREIGN_MARKETPLACE = /(^|\.)(etsy|ebay|wish|shein|pinterest|amazon|walmart|wayfair)\.[a-z.]+$/;
 // Reserved / made-up hosts the model sometimes writes instead of a real link (RFC 2606 etc.).
 const PLACEHOLDER_HOST = /(^|\.)example\.(com|org|net|edu)$|\.(example|test|invalid|localhost|local)$/;
 
@@ -95,7 +95,7 @@ RULES - follow them strictly:
 2. "url" must be copied character by character from a search result. Never guess, shorten, construct or "fix" a URL. If you are not certain that a product page exists at that exact URL, leave the item out. A few correct items are far better than many doubtful ones.
 3. "url" must be the page of ONE specific product - not a category, search, brand or home page.
 4. "title" must be the product name exactly as it is written on that page (keep the page's language).
-5. Shops: online shops that deliver in ${r.name}, preferably with a local domain. Search in ${r.language} (for example "<product> купити") and use "site:" queries for these shops: ${r.shops.join(', ')}. Do NOT use etsy, amazon, ebay, aliexpress, temu or other foreign marketplaces.
+5. Shops: online shops that deliver in ${r.name}, preferably with a local domain. Search in ${r.language} (for example "<product> купити") and use "site:" queries for these shops: ${r.shops.join(', ')}. AliExpress and Temu are allowed. Do NOT use etsy, amazon, ebay or other foreign marketplaces.
 6. "why": one short sentence (max 140 characters) in the language of the person's interests that explains why THIS product suits them.
 
 Reply with ONLY a JSON array, no introduction and no explanations. Each element:
