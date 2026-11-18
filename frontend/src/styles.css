@@ -356,3 +356,9 @@ details summary { cursor: pointer; color: var(--accent); }
 
 /* Helper line under the shop link, in the site's mono "meta" style (like .section-sub) */
 .field-hint { font-family: var(--mono); font-size: .72rem; letter-spacing: .02em; color: var(--muted); text-transform: none; }
+
+/* Dashboard: descriptions in the site's mono "meta" style; .dash-title looks like "My wishlists" */
+.meta-text { font-family: var(--mono); font-size: .8rem; line-height: 1.6; color: var(--muted); }
+.cta .meta-text { max-width: 62ch; margin: 4px auto 14px; }
+.meta-text b { color: var(--text); font-weight: 600; }
+.dash-title { text-align: left; font-family: "Italiana", Georgia, serif; font-weight: 400; text-transform: uppercase; letter-spacing: .05em; font-size: 1.6rem; margin: 28px 0 14px; }
