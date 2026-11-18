@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import BookmarkletButton from '../BookmarkletButton.jsx';
 import { bookmarkletCode } from '../bookmarklet.js';
 import { useSession } from '../session.jsx';
 import BarShortcut, { isMac } from '../BarShortcut.jsx';
 
 export const isMobile = (ua = navigator.userAgent) => /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+// Same test as the .pointer-only CSS rule: touch screen or a phone-sized window.
+const phoneLike = () => isMobile() || (typeof matchMedia === 'function' && matchMedia('(hover: none) and (pointer: coarse), (max-width: 640px)').matches);
 function CopyCode() {
   const [state, setState] = useState('');
   const copy = async () => {
@@ -28,23 +30,18 @@ function CopyCode() {
 // Install page for the "+ Bazhanka" browser button.
 export default function AddButton() {
   const { user } = useSession();
-  const mobile = isMobile();
+  // The button can't work on a phone, so the page about it isn't shown there at all.
+  if (phoneLike()) return user === undefined ? null : <Navigate to={user ? '/dashboard' : '/'} replace />;
 
   return (
     <div className="page">
       <h1>The fastest way to save a wish</h1>
-      <p className={`meta-text intro-text ${mobile ? 'hidden' : 'pointer-only'}`}>
+      <p className="meta-text intro-text">
         See something you love while you browse a shop? One click on the <b style={{ whiteSpace: 'nowrap' }}>+ Bazhanka</b> button,
         and it’s in your wishlist — title, photo and price included. No copying, no typing
       </p>
 
-      {/* On phones only this note is shown: the intro, the steps and the button are for computers. */}
-      <p className={`notice meta-text ${mobile ? '' : 'phone-only'}`}>
-        On a phone there is no bookmarks bar for this button, so it can’t be used there. Paste a link into the gift form
-        instead — or set the button up on your computer
-      </p>
-
-      <div className={`card stack ${mobile ? 'hidden' : 'pointer-only'}`}>
+      <div className="card stack">
         <h3>1. Show the bookmarks bar</h3>
         <p className="meta-text">
           Press <BarShortcut /> if you don’t see it under the address bar
