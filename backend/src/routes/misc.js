@@ -7,7 +7,7 @@ const r = Router();
 
 // Support for the project itself (a Monobank jar). DONATION_URL / DONATION_LABEL override the defaults;
 // with no link at all the site shows no support links.
-const SUPPORT_URL = '';
+const SUPPORT_URL = 'https://send.monobank.ua/jar/5jhAhkuKYy'; // Monobank jar “Підтримати Бажанку”
 
 r.get('/config', (_req, res) => {
   res.json({
