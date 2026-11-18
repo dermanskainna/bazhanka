@@ -56,7 +56,7 @@ export function signRequest({ method = 'POST', host, path, region, service = 'be
 }
 
 // Calls Converse with Amazon Nova web grounding enabled. Returns { text, citations, sourceUrls, searches, shape }.
-export async function converseWithWebSearch({ system, prompt, maxTokens = 3000, timeoutMs = 45_000 }) {
+export async function converseWithWebSearch({ system, prompt, maxTokens = 3000, timeoutMs = 45_000, grounding = true }) {
   if (!hasAwsCredentials()) throw new Error('AWS credentials are not available');
   const { region, modelId } = bedrockConfig();
   const host = `bedrock-runtime.${region}.amazonaws.com`;
@@ -64,7 +64,7 @@ export async function converseWithWebSearch({ system, prompt, maxTokens = 3000, 
   const body = JSON.stringify({
     system: [{ text: system }],
     messages: [{ role: 'user', content: [{ text: prompt }] }],
-    toolConfig: { tools: [{ systemTool: { name: 'nova_grounding' } }] },
+    ...(grounding ? { toolConfig: { tools: [{ systemTool: { name: 'nova_grounding' } }] } } : {}),
     inferenceConfig: { maxTokens, temperature: 0.3 },
   });
   const headers = signRequest({

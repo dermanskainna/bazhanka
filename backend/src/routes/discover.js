@@ -2,14 +2,15 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { requireUser, isAdmin } from '../auth.js';
 import { hasAwsCredentials, bedrockConfig } from '../bedrock.js';
-import { cacheKey, findPartner, hostOf, normDomain, rankOffers, searchOffers } from '../discover.js';
+import { cacheKey, findPartner, hostOf, normDomain, rankOffers, searchOffers, provider } from '../discover.js';
+import { serperKey } from '../serper.js';
 import { ah, HttpError, str, num, httpUrl, intId } from '../util.js';
 
 const r = Router();
 
 const DAILY_LIMIT = () => Number(process.env.DISCOVER_DAILY_LIMIT || 5);
 const CACHE_HOURS = () => Number(process.env.DISCOVER_CACHE_HOURS || 24);
-const enabled = () => process.env.DISCOVER_ENABLED !== 'false' && (process.env.DISCOVER_MOCK === 'true' || hasAwsCredentials());
+const enabled = () => process.env.DISCOVER_ENABLED !== 'false' && (process.env.DISCOVER_MOCK === 'true' || !!serperKey() || hasAwsCredentials());
 
 const activePartners = async () => (await query('SELECT * FROM partners WHERE active ORDER BY id')).rows;
 
@@ -137,6 +138,21 @@ r.get('/admin/discover-check', requireUser, adminOnly, ah(async (_req, res) => {
     res.json({ ...out, ok: true, ms: Date.now() - t0, offers: offers.length, debug });
   } catch (e) {
     res.json({ ...out, ok: false, ms: Date.now() - t0, kind: e.kind || 'unknown', error: e.message, debug });
+  }
+}));
+
+// Admin tester: runs the real pipeline with no daily limit and no cache, and returns the debug trail.
+r.post('/admin/discover-run', requireUser, adminOnly, ah(async (req, res) => {
+  const interests = str(req.body.interests, 300);
+  if (!interests) throw new HttpError(400, 'Write what the person likes');
+  const params = { interests, budget: num(req.body.budget), currency: 'UAH', provider: ['serper', 'nova'].includes(req.body.provider) ? req.body.provider : undefined };
+  const t0 = Date.now();
+  const debug = {};
+  try {
+    const offers = rankOffers(await searchOffers(params, await activePartners(), debug), await activePartners());
+    res.json({ ok: true, provider: debug.provider || provider(params.provider), ms: Date.now() - t0, offers, debug });
+  } catch (e) {
+    res.json({ ok: false, provider: debug.provider || provider(params.provider), ms: Date.now() - t0, kind: e.kind || 'unknown', error: e.message, debug });
   }
 }));
 
