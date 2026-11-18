@@ -78,7 +78,7 @@ export default function Dashboard() {
               <Link key={l.id} to={`/l/${l.slug}`} className="card list-card">
                 <span className="tag">{l.occasion || 'Wishlist'}</span>
                 <h3>{l.title}</h3>
-                <p className="muted">{l.itemCount} {l.itemCount === 1 ? 'item' : 'items'}{l.eventDate ? ` · ${niceDate(l.eventDate)}` : ''}</p>
+                <p className="meta-text">{l.itemCount} {l.itemCount === 1 ? 'item' : 'items'}{l.eventDate ? ` · ${niceDate(l.eventDate)}` : ''}</p>
               </Link>
             ))}
           </div>

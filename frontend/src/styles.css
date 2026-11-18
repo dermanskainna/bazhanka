@@ -367,3 +367,4 @@ details summary { cursor: pointer; color: var(--accent); }
 .intro-text { font-size: .86rem; max-width: none; }
 details.meta-text summary { font-family: var(--mono); }
 details.meta-text p { margin: 8px 0 0; }
+.lead.meta-text { max-width: none; }

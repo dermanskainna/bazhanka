@@ -15,7 +15,7 @@ export default function BookmarkletButton() {
         onClick={(e) => { e.preventDefault(); setHint(true); }}>
         + Bazhanka
       </a>
-      {hint && <small className="muted"> Drag the button to your bookmarks bar, don’t click it here.</small>}
+      {hint && <small className="meta-text"> Drag the button to your bookmarks bar, don’t click it here</small>}
     </span>
   );
 }

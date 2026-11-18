@@ -54,7 +54,7 @@ function Overview() {
   return (
     <div className="page">
       <h1>Secret Santa</h1>
-      <p className="lead">Invite your group, Bazhanka draws the pairs. Everyone sees only the wishlist of the person they’re gifting.</p>
+      <p className="lead meta-text">Invite your group, Bazhanka draws the pairs. Everyone sees only the wishlist of the person they’re gifting</p>
       {error && <p className="error">{error}</p>}
 
       {groups?.length > 0 && (

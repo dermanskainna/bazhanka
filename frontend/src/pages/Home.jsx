@@ -53,7 +53,7 @@ export default function Home() {
           <article className="deal">
             <div className="pic p1" aria-hidden><LinkIcon size={56} /></div>
             <h3>Paste a shop link</h3>
-            <p>Title, photo and price are filled in automatically when the shop allows it.</p>
+            <p>Title, photo and price are filled in automatically.</p>
             <Link to={start} className="btn small">Try it</Link>
           </article>
           <article className="deal">
