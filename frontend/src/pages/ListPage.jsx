@@ -237,11 +237,11 @@ export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
           onPaste={(e) => { const t = e.clipboardData.getData('text'); setTimeout(() => fetchPreview(t.trim()), 0); }}
           onBlur={() => !item && !f.title && fetchPreview(f.url)} autoFocus={!item} />
         {status === 'bad' ? <small className="field-error">{error}</small> : (
-          <small className="muted">
+          <small className="field-hint">
             {status === 'loading' ? 'Looking up the product…' : status === 'ok' ? 'Filled in from the shop — check it below.' :
               status === 'manual' ? '' :
               status === 'missing' ? 'The shop says this page doesn’t exist. Check the link, or fill the item in by hand.' :
-              status === 'button' ? 'Filled in from the shop page you opened — check it below.' : 'Paste a link and we try to fill in title, photo and price.'}
+              status === 'button' ? 'Filled in from the shop page you opened — check it below.' : 'Paste a shop link — we’ll fill in the title, photo and price for you.'}
           </small>
         )}
       </label>

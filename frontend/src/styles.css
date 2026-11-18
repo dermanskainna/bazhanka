@@ -353,3 +353,6 @@ details summary { cursor: pointer; color: var(--accent); }
 /* Small window opened by the + Bazhanka button */
 .popup-shell .page { padding-top: 16px; }
 .popup-shell .page > h1 { font-size: 1.8rem; margin: 0 0 12px; }
+
+/* Helper line under the shop link, in the site's mono "meta" style (like .section-sub) */
+.field-hint { font-family: var(--mono); font-size: .72rem; letter-spacing: .02em; color: var(--muted); text-transform: none; }
