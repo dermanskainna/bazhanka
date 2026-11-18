@@ -149,7 +149,7 @@ function OwnerView({ data, reload }) {
       )}
 
       {data.items.length === 0 && editing !== 'new' && (
-        <div className="card empty"><p>Your list is empty. Paste a link from Rozetka, Prom, Makeup, Yakaboo or any other shop — if the shop allows it we’ll fill in the rest, otherwise add the details by hand.</p></div>
+        <div className="card empty"><p className="meta-text">Your list is empty. Paste a link from Rozetka, Prom, Makeup, Yakaboo or any other shop and we’ll fill in the rest — or add a gift by hand, or with the <b style={{ whiteSpace: 'nowrap' }}>+ Bazhanka</b> button while you shop</p></div>
       )}
 
       <div className="guide">
@@ -164,7 +164,7 @@ function OwnerView({ data, reload }) {
       </div>
       <div className="danger-zone">
         <button className="btn danger-btn" onClick={removeList}><TrashIcon size={16} /> Delete this wishlist</button>
-        <small className="muted">Removes the list and all its gifts for you and your friends.</small>
+        <small className="meta-text">Removes the list and all its gifts for you and your friends</small>
       </div>
     </>
   );
