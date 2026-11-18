@@ -159,7 +159,7 @@ The production site runs on AWS in `us-east-1`, described by CloudFormation temp
 ```
 CloudFront ─┬─ /*  ───────────────────────────────▶ S3 (built frontend)
             ├─ /api/preview, /api/discover/*,
-            │  /api/admin/discover-check ─────────▶ Lambda bazhanka-edge (no VPC: internet, Bedrock)
+            │  /api/admin/discover-check|run ─────────▶ Lambda bazhanka-edge (no VPC: internet, Bedrock)
             │                                            │ SQL via lambda:Invoke (HMAC-signed)
             └─ other /api/*, /healthz ────────────▶ Lambda bazhanka-backend (in the VPC)
                                                          │ TCP 5432, SSL
