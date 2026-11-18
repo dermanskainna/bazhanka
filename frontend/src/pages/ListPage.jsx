@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, money, niceDate } from '../api.js';
 import { isOwnPhoto, uploadPhoto } from '../photo.js';
+import { onListChanged } from '../sync.js';
 import { useSession } from '../session.jsx';
 import { GiftIcon, LockIcon, AsteriskIcon, LinkIcon, CheckIcon, TrashIcon } from '../icons.jsx';
 
@@ -34,6 +35,8 @@ export default function ListPage() {
 
   // Reload when the session changes (signed out -> signed in shows "reserved by me").
   useEffect(() => { if (user !== undefined) load(); }, [load, user]);
+  // A gift added from the "+ Bazhanka" window (or in another tab) shows up here without a reload.
+  useEffect(() => onListChanged(load, slug), [load, slug]);
 
   if (error) return <div className="page"><h1>Oops</h1><p>{error}</p><Link to="/">Go home</Link></div>;
   if (!data) return <div className="page muted">Loading…</div>;

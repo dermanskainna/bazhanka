@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, money, niceDate } from '../api.js';
 import { useSession } from '../session.jsx';
 import { GiftIcon } from '../icons.jsx';
+import { onListChanged } from '../sync.js';
 
 const OCCASIONS = ['Birthday', 'Christmas', 'St Nicholas Day', 'Graduation', 'New Year', 'Wedding', 'Just because'];
 
@@ -16,8 +17,12 @@ export default function Dashboard() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api('/wishlists').then((d) => setLists(d.wishlists)).catch((e) => setError(e.message));
-    api('/me/gifts').then((d) => setGifts(d.gifts)).catch(() => {});
+    const load = () => {
+      api('/wishlists').then((d) => setLists(d.wishlists)).catch((e) => setError(e.message));
+      api('/me/gifts').then((d) => setGifts(d.gifts)).catch(() => {});
+    };
+    load();
+    return onListChanged(load); // item counts stay right when gifts are added in another tab
   }, []);
 
   const create = async (e) => {

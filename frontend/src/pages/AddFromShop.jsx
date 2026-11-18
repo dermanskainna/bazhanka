@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { normCurrency, parsePrice } from '../bookmarklet.js';
 import { ItemForm } from './ListPage.jsx';
+import { notifyListChanged } from '../sync.js';
 
 const LAST_LIST = 'bz:lastList';
 const AUTO_CLOSE_SECONDS = 6;
@@ -81,7 +82,9 @@ export default function AddFromShop() {
         <div className="card stack">
           <p>“{done.title}” is now on <b>{done.list.title}</b>.</p>
           <div className="row">
-            <a className="btn" href={`/l/${done.list.slug}`} target={inPopup ? '_blank' : undefined} rel="noreferrer">Open the list</a>
+            {/* In the small window: open the list in a normal tab and close this window. */}
+            <a className="btn" href={`/l/${done.list.slug}`} target={inPopup ? '_blank' : undefined} rel="noreferrer"
+              onClick={inPopup ? () => setTimeout(closeWindow, 150) : undefined}>Open the list</a>
             {inPopup && <button className="btn ghost" onClick={closeWindow}>Back to the shop</button>}
             {!inPopup && window.history.length > 1 && <button className="btn ghost" onClick={backToShop}>Back to the shop</button>}
           </div>
@@ -113,6 +116,7 @@ export default function AddFromShop() {
         onDone={(f) => {
           try { localStorage.setItem(LAST_LIST, listId); } catch { /* private mode */ }
           setDone({ title: f.title, list: chosen });
+          notifyListChanged(chosen.slug);
         }}
         onCancel={() => (inPopup ? window.close() : window.history.back())}
       />
