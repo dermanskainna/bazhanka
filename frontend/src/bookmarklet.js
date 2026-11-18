@@ -4,8 +4,9 @@
 // This button runs in the person's own browser, on the product page they already opened, reads the
 // same product data our server would (JSON-LD Product, Open Graph / itemprop tags) and opens
 // Bazhanka's /add page with the form filled in. The shop sees an ordinary visitor, nothing else.
-// On a page that is not marked as a product (no JSON-LD Product, product Open Graph or price tags)
-// it opens nothing and only shows a small note on the page.
+// A page counts as a product if it is marked as one (JSON-LD Product, product Open Graph, price tags)
+// or, for shops without such markup, if it shows a heading, a current price with a currency and a buy
+// button or a product-like address. Otherwise the button opens nothing and only shows a small note.
 //
 // `grab` is turned into a string (`javascript:(...)(origin)`), so it must not use anything from
 // outside its own body: no imports, no outer variables.
@@ -94,8 +95,56 @@ function grab(origin) {
     meta('[itemprop="priceCurrency"]');
 
   // Is this a product page at all? Shops mark product pages for search engines and link previews.
-  var looksLikeProduct = !!product || !!priceTag || /product/i.test(meta('meta[property="og:type"]')) ||
+  var marked = !!product || !!priceTag || /product/i.test(meta('meta[property="og:type"]')) ||
     !!d.querySelector('[itemtype*="schema.org/Product"], [itemtype*="schema.org/Offer"]');
+
+  // Some shops (e.g. silpo.ua) have no such markup. Then look at what a person sees: a heading,
+  // a visible current price with a currency, and a buy button or a product-like address.
+  var h1 = d.querySelector('h1');
+  var visible = function (el) { var r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  var struck = function (el) {
+    for (var e = el; e && e !== d.body; e = e.parentElement) {
+      if (/^(S|DEL|STRIKE)$/.test(e.tagName)) return true;
+      if (/line-through/.test(getComputedStyle(e).textDecorationLine || '')) return true;
+    }
+    return false;
+  };
+  var PRICE = /^\s*(₴|\$|€|£)?\s*(\d{1,3}(?:[\s ]\d{3})+|\d+)([.,]\d{1,2})?\s*(грн\.?|₴|uah|\$|€|£|zł|usd|eur)?\s*$/i;
+  // A price needs a currency sign or word: "29.99 грн", "₴ 1 299", "$15".
+  var priceIn = function (t) { if (t.length > 30) return null; var m = t.match(PRICE); return m && (m[1] || m[4]) ? m : null; };
+  var visiblePrice = null;
+  if (h1) {
+    var all = d.body.querySelectorAll('*');
+    var after = [], before = [];
+    for (var k = 0; k < all.length; k++) {
+      var el = all[k];
+      if (/^(SCRIPT|STYLE|NOSCRIPT|OPTION|INPUT|TEXTAREA)$/.test(el.tagName)) continue;
+      var t = el.textContent || '';
+      var m = priceIn(t);
+      if (!m) continue;
+      // The innermost element that holds the whole price (a child holding it too wins).
+      var inner = false;
+      for (var c = 0; c < el.children.length && !inner; c++) inner = !!priceIn(el.children[c].textContent || '');
+      if (inner || !visible(el) || struck(el)) continue;
+      ((h1.compareDocumentPosition(el) & 4) ? after : before).push({ text: t, cur: m[1] || m[4] });
+    }
+    visiblePrice = after[0] || before[0] || null;
+  }
+  var buyButton = false;
+  var buttons = d.querySelectorAll('button, a, [role="button"], input[type="submit"]');
+  for (var b = 0; b < buttons.length && !buyButton; b++) {
+    var bt = (buttons[b].textContent || buttons[b].value || '').replace(/\s+/g, ' ').trim();
+    if (bt.length < 40 && /(у кошик|в кошик|до кошика|додати в кошик|купити|в корзину|купить|add to (cart|bag|basket)|buy now|buy it)/i.test(bt) && visible(buttons[b])) buyButton = true;
+  }
+  var productUrl = /\/(product|products|p|item|items|goods|dp|tovar|tovary|produkt)\/|\/p\d{4,}|[-_/]\d{5,}(\.html?)?\/?$/i.test(location.pathname);
+  var seen = !marked && !!h1 && !!visiblePrice && (buyButton || productUrl);
+  var looksLikeProduct = marked || seen;
+  if (seen) {
+    out.title = text(h1) || out.title; // og:title on such shops is often just the shop name
+    out.price = out.price || visiblePrice.text.replace(/[^\d.,\s ]/g, '').trim();
+    var cur = visiblePrice.cur.toLowerCase();
+    out.currency = out.currency || (/грн|₴|uah/.test(cur) ? 'UAH' : cur === '$' || cur === 'usd' ? 'USD' : cur === '€' || cur === 'eur' ? 'EUR' : cur === '£' ? 'GBP' : cur === 'zł' ? 'PLN' : '');
+  }
 
   var send = function () {
     // 3. Fill gaps from the page itself: the heading and the biggest picture.
