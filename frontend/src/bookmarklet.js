@@ -56,8 +56,8 @@ function grab(origin) {
   }
 
   var out = { url: location.href, title: '', image: '', price: '', currency: '' };
-  var canon = d.querySelector('link[rel="canonical"]');
-  if (canon && canon.href && /^https?:/.test(canon.href) && new URL(canon.href).host === location.host) out.url = canon.href;
+  // The address the person sees. Not <link rel=canonical>: single-page shops (silpo.ua) leave it pointing
+  // at the previous page, e.g. the category. Tracking parameters are stripped by the server on save.
 
   // 1. JSON-LD Product (most shops have it; it is what search engines read)
   var isProduct = function (n) { var t = n && n['@type']; return t === 'Product' || (Array.isArray(t) && t.indexOf('Product') !== -1); };
@@ -139,8 +139,19 @@ function grab(origin) {
   var productUrl = /\/(product|products|p|item|items|goods|dp|tovar|tovary|produkt)\/|\/p\d{4,}|[-_/]\d{5,}(\.html?)?\/?$/i.test(location.pathname);
   var seen = !marked && !!h1 && !!visiblePrice && (buyButton || productUrl);
   var looksLikeProduct = marked || seen;
+  var biggestImage = function () {
+    var best = null, area = 150 * 150;
+    for (var j = 0; j < d.images.length; j++) {
+      var im = d.images[j];
+      var a = (im.naturalWidth || 0) * (im.naturalHeight || 0);
+      if (a > area && visible(im) && /^https?:/.test(im.currentSrc || im.src)) { area = a; best = im; }
+    }
+    return best ? best.currentSrc || best.src : '';
+  };
   if (seen) {
-    out.title = text(h1) || out.title; // og:title on such shops is often just the shop name
+    // Shops without product markup usually have site-wide og:title / og:image (shop name and logo).
+    out.title = text(h1) || out.title;
+    out.image = biggestImage() || out.image;
     out.price = out.price || visiblePrice.text.replace(/[^\d.,\s ]/g, '').trim();
     var cur = visiblePrice.cur.toLowerCase();
     out.currency = out.currency || (/грн|₴|uah/.test(cur) ? 'UAH' : cur === '$' || cur === 'usd' ? 'USD' : cur === '€' || cur === 'eur' ? 'EUR' : cur === '£' ? 'GBP' : cur === 'zł' ? 'PLN' : '');
@@ -149,15 +160,7 @@ function grab(origin) {
   var send = function () {
     // 3. Fill gaps from the page itself: the heading and the biggest picture.
     out.title = out.title || text(d.querySelector('h1')) || d.title;
-    if (!out.image) {
-      var best = null, area = 150 * 150;
-      for (var j = 0; j < d.images.length; j++) {
-        var im = d.images[j];
-        var a = (im.naturalWidth || 0) * (im.naturalHeight || 0);
-        if (a > area && /^https?:/.test(im.currentSrc || im.src)) { area = a; best = im; }
-      }
-      if (best) out.image = best.currentSrc || best.src;
-    }
+    if (!out.image) out.image = biggestImage();
     var q = new URLSearchParams();
     q.set('url', out.url.slice(0, 2000));
     if (out.title) q.set('title', out.title.replace(/\s+/g, ' ').trim().slice(0, 300));
