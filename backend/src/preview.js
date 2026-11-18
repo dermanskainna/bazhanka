@@ -86,6 +86,8 @@ export function extractMetadata(html, pageUrl) {
   if (out.image) {
     try { out.image = new URL(out.image, pageUrl).toString(); } catch { out.image = null; }
   }
+  // JSON-LD strings sometimes carry HTML entities ("Lay&#39;s"); let the HTML parser decode them.
+  if (out.title && /&[#a-z0-9]+;/i.test(out.title)) out.title = cheerio.load(`<p>${out.title.replace(/</g, '&lt;')}</p>`)('p').text();
   if (out.title) out.title = out.title.replace(/\s+/g, ' ').slice(0, 300);
   if (out.currency) out.currency = String(out.currency).toUpperCase().slice(0, 3);
   if (out.currency === 'ГРН') out.currency = 'UAH';

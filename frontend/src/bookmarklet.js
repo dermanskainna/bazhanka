@@ -139,14 +139,34 @@ function grab(origin) {
   var productUrl = /\/(product|products|p|item|items|goods|dp|tovar|tovary|produkt)\/|\/p\d{4,}|[-_/]\d{5,}(\.html?)?\/?$/i.test(location.pathname);
   var seen = !marked && !!h1 && !!visiblePrice && (buyButton || productUrl);
   var looksLikeProduct = marked || seen;
-  var biggestImage = function () {
-    var best = null, area = 150 * 150;
-    for (var j = 0; j < d.images.length; j++) {
-      var im = d.images[j];
-      var a = (im.naturalWidth || 0) * (im.naturalHeight || 0);
-      if (a > area && visible(im) && /^https?:/.test(im.currentSrc || im.src)) { area = a; best = im; }
+  // The picture shown biggest on the page, in its best available quality: shops often show a small or
+  // blurred version first and keep the sharp one in srcset / <picture> / data-zoom-image.
+  var bestSrc = function (im) {
+    var cands = [], add = function (set) {
+      String(set || '').split(/,\s+/).forEach(function (part) {
+        var bits = part.trim().split(/\s+/), w = parseFloat(bits[1]) || 1;
+        if (/^(https?:)?\/\//.test(bits[0]) || /^\//.test(bits[0])) cands.push({ u: abs(bits[0]), w: /x$/.test(bits[1] || '') ? w * 1000 : w });
+      });
+    };
+    add(im.getAttribute('srcset'));
+    if (im.parentElement && im.parentElement.tagName === 'PICTURE') {
+      var srcs = im.parentElement.querySelectorAll('source');
+      for (var i = 0; i < srcs.length; i++) add(srcs[i].getAttribute('srcset'));
     }
-    return best ? best.currentSrc || best.src : '';
+    var zoom = im.getAttribute('data-zoom-image') || im.getAttribute('data-large') || im.getAttribute('data-original') || im.getAttribute('data-full');
+    if (zoom) cands.push({ u: abs(zoom), w: 1e9 });
+    cands.sort(function (x, y) { return y.w - x.w; });
+    var pick = cands.length && /^https?:/.test(cands[0].u) ? cands[0].u : '';
+    return pick || im.currentSrc || im.src;
+  };
+  var biggestImage = function () {
+    var best = null, area = 120 * 120;
+    for (var j = 0; j < d.images.length; j++) {
+      var im = d.images[j], r = im.getBoundingClientRect();
+      var a = r.width * r.height;
+      if (a > area && im.naturalWidth > 0 && /^https?:/.test(im.currentSrc || im.src)) { area = a; best = im; }
+    }
+    return best ? bestSrc(best) : '';
   };
   if (seen) {
     // Shops without product markup usually have site-wide og:title / og:image (shop name and logo).
@@ -163,6 +183,8 @@ function grab(origin) {
     if (!out.image) out.image = biggestImage();
     var q = new URLSearchParams();
     q.set('url', out.url.slice(0, 2000));
+    // Some shops put HTML entities into JSON-LD ("Lay&#39;s"); DOMParser decodes them without running anything.
+    if (/&[#a-z0-9]+;/i.test(out.title)) out.title = new DOMParser().parseFromString(out.title, 'text/html').documentElement.textContent || out.title;
     if (out.title) q.set('title', out.title.replace(/\s+/g, ' ').trim().slice(0, 300));
     if (/^https?:/.test(out.image)) q.set('image', out.image.slice(0, 2000));
     if (out.price) q.set('price', out.price.slice(0, 40));

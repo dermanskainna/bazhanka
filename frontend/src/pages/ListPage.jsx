@@ -67,15 +67,25 @@ function ItemMedia({ item }) {
 }
 
 // One numbered card in the "gift guide" grid. `children` are the actions under the caption.
+// A link to the product in the shop (new tab), or a plain block when the item has no link.
+function ShopLink({ url, className, label, children }) {
+  return url ? (
+    <a className={`${className} shop-link`} href={url} target="_blank" rel="noreferrer" aria-label={label}>{children}</a>
+  ) : <div className={className}>{children}</div>;
+}
+
+// The photo and the title open the product in the shop; buttons below keep working as before.
 function GiftCard({ n, item, taken, stamp, children }) {
   return (
-    <article className={`gift ${taken ? 'taken' : ''}`}>
-      <div className="gift-frame">
+    <article className={`gift ${taken ? 'taken' : ''} ${item.url ? 'has-link' : ''}`}>
+      <ShopLink url={item.url} className="gift-frame" label={`Open “${item.title}” in the shop`}>
         <span className="gift-no">{n}</span>
         <ItemMedia item={item} />
         {stamp && <span className="stamp">{stamp}</span>}
-      </div>
-      <h3 className="gift-name" title={item.title}>#{item.title}</h3>
+      </ShopLink>
+      <h3 className="gift-name" title={item.title}>
+        {item.url ? <a className="shop-link" href={item.url} target="_blank" rel="noreferrer">#{item.title}</a> : `#${item.title}`}
+      </h3>
       <div className="price">{item.price !== null ? money(item.price, item.currency) : '\u00a0'}</div>
       {item.chipIn && <span className="tag">Chip-in gift</span>}
       {item.note && <p className="note">{item.note}</p>}
