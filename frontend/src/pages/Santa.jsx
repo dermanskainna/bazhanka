@@ -17,7 +17,7 @@ function ListPicker({ lists, value, onChange }) {
         <option value="">— none yet —</option>
         {lists.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}
       </select>
-      {lists.length === 0 && <small className="muted">You have no wishlists yet — <Link to="/dashboard">create one</Link> so your Santa knows what to get you.</small>}
+      {lists.length === 0 && <small className="meta-text">You have no wishlists yet — <Link to="/dashboard">create one</Link> so your Santa knows what to get you</small>}
     </label>
   );
 }
@@ -59,13 +59,13 @@ function Overview() {
 
       {groups?.length > 0 && (
         <section>
-          <h2>My groups</h2>
+          <h2 className="dash-title">My groups</h2>
           <div className="list-grid">
             {groups.map((g) => (
               <Link key={g.code} to={`/santa/${g.code}`} className="card list-card">
                 <span className="tag">{g.drawn ? 'Names drawn' : 'Gathering people'}</span>
                 <h3>{g.name}</h3>
-                <p className="muted">{g.members} members</p>
+                <p className="meta-text">{g.members} {Number(g.members) === 1 ? 'member' : 'members'}</p>
               </Link>
             ))}
           </div>
