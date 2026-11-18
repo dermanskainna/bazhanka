@@ -5,26 +5,13 @@ import { useSession } from '../session.jsx';
 import { GiftIcon, LockIcon, AsteriskIcon, LinkIcon } from '../icons.jsx';
 
 // Set by /add once the "+ Bazhanka" browser button has been used in this browser.
-export const BUTTON_USED = 'bz:hasButton';
-const buttonUsed = () => { try { return localStorage.getItem(BUTTON_USED) === '1'; } catch { return false; } };
-const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return 'This shop'; } };
-
 // Shown when the server could not read the shop page. Not reading a page is normal (many shops don't
-// allow it), so this is a calm next step, not an error.
-function ManualHelp({ url, reason }) {
-  const host = hostOf(url);
-  const headline = reason === 'blocked' ? `${host} doesn’t share product details automatically`
-    : reason === 'unreachable' ? `We couldn’t reach ${host} right now`
-      : `We couldn’t pick up the details from ${host}`;
+// allow it), so this is a friendly next step, not an error.
+function ManualHelp() {
   return (
     <div className="manual-help" role="status">
-      <strong>{headline}</strong>
-      <p>That happens with many shops and nothing is wrong with your link. Add the title and price yourself, or:</p>
-      {buttonUsed() ? (
-        <p>open the product in the shop and press <b>+ Bazhanka</b> on your bookmarks bar — it fills in everything.</p>
-      ) : (
-        <p><Link to="/button" target="_blank">get the + Bazhanka button</Link> — it fills in title, photo and price from any shop page in one click.</p>
-      )}
+      <strong>Link added! Now give it a name and a price.</strong>
+      <p>Tip: the <Link to="/button" target="_blank">+ Bazhanka button</Link> can fill this in for you.</p>
     </div>
   );
 }
@@ -169,7 +156,6 @@ export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
   const [f, setF] = useState(item ? { ...emptyItem, ...item, price: item.price ?? '', imageUrl: item.imageUrl || '', url: item.url || '', note: item.note || '' } : { ...emptyItem, ...initial });
   // '' | loading | ok | partial | button | manual (shop not readable) | missing (404) | bad (not a usable link)
   const [status, setStatus] = useState(initial?.title ? 'button' : '');
-  const [reason, setReason] = useState('');
   const titleRef = useRef(null);
   const [error, setError] = useState('');
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
@@ -190,7 +176,6 @@ export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
       }));
       setStatus(preview.title ? 'ok' : 'partial');
     } catch (err) {
-      setReason(err.reason || '');
       if (err.reason === 'bad_link') { setStatus('bad'); setError(err.message); return; }
       setStatus(err.reason === 'not_found' ? 'missing' : 'manual');
       titleRef.current?.focus();
@@ -220,13 +205,13 @@ export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
           <small className="muted">
             {status === 'loading' ? 'Looking up the product…' : status === 'ok' ? 'Filled in from the shop — check it below.' :
               status === 'partial' ? 'The shop shared only part of the details — please complete them.' :
-              status === 'manual' ? 'Link saved. Fill in the rest below.' :
+              status === 'manual' ? '' :
               status === 'missing' ? 'The shop says this page doesn’t exist. Check the link, or fill the item in by hand.' :
               status === 'button' ? 'Filled in from the shop page you opened — check it below.' : 'Paste a link and we try to fill in title, photo and price.'}
           </small>
         )}
       </label>
-      {status === 'manual' && <ManualHelp url={f.url} reason={reason} />}
+      {status === 'manual' && <ManualHelp />}
       {f.imageUrl && <img className="preview-img" src={f.imageUrl} alt="" referrerPolicy="no-referrer" />}
       <label>Title<input ref={titleRef} required value={f.title} onChange={set('title')} placeholder="What do you want?" /></label>
       <div className="grid2">

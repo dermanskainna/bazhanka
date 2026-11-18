@@ -79,9 +79,8 @@ export default function AddButton() {
     <div className="page">
       <h1>Add from any shop</h1>
       <p>
-        Some shops don’t let our server read their pages, so a pasted link can’t fill in the details.
-        This button works in <b>your</b> browser instead: open a product in any shop, press the button,
-        and Bazhanka opens with the title, photo and price already filled in.
+        <b>The fastest way to save a wish.</b> See something you love? One click on the + Bazhanka button,
+        and it’s in your wishlist — title, photo and price included. No copying, no typing.
       </p>
 
       {detected === 'mobile' && (

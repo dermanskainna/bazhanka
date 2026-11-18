@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api.js';
 import { normCurrency, parsePrice } from '../bookmarklet.js';
-import { BUTTON_USED, ItemForm } from './ListPage.jsx';
+import { ItemForm } from './ListPage.jsx';
 
 const LAST_LIST = 'bz:lastList';
 const httpOnly = (v) => (/^https?:\/\//i.test(v || '') ? v : '');
@@ -24,9 +24,6 @@ export default function AddFromShop() {
   const [listId, setListId] = useState('');
   const [done, setDone] = useState(null);
   const [error, setError] = useState('');
-
-  // Remember that this browser has the button, so the item form can suggest it later.
-  useEffect(() => { try { localStorage.setItem(BUTTON_USED, '1'); } catch { /* private mode */ } }, []);
 
   useEffect(() => {
     api('/wishlists').then(({ wishlists }) => {
