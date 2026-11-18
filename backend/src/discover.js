@@ -355,6 +355,17 @@ export function parseCandidatesPlan(text) {
 }
 
 const isGoogleHost = (h) => !!h && /(^|\.)google\.[a-z.]+$/.test(h);
+// google.com/goto?url=https%3A%2F%2Fshop... carries the real address only when it is a plain URL.
+export function unwrapGoogle(u) {
+  try {
+    const x = new URL(u);
+    if (isGoogleHost(x.hostname) && /^\/(goto|url)$/.test(x.pathname)) {
+      const inner = x.searchParams.get('url') || x.searchParams.get('q');
+      if (inner && /^https?:\/\//i.test(inner)) return inner;
+    }
+  } catch { /* not a URL */ }
+  return u;
+}
 const MAX_PER_SHOP = 3;
 const MAX_RESULTS = 12;
 
@@ -362,7 +373,7 @@ const MAX_RESULTS = 12;
 export function shoppingToOffers(listings, fit, { budget, currency }, stats = {}) {
   const out = [];
   for (const l of listings) {
-    const url = httpUrl(l.url);
+    const url = httpUrl(unwrapGoogle(l.url));
     const host = hostOf(url);
     if (!url || !l.title) { stats.badListing = (stats.badListing || 0) + 1; continue; }
     if (isGoogleHost(host)) { stats.googleRedirect = (stats.googleRedirect || 0) + 1; continue; }
