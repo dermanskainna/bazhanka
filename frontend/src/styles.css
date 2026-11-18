@@ -326,9 +326,9 @@ kbd { font-family: var(--mono); font-size: .8em; border: 1px solid var(--line); 
 .chip-tab.on { background: var(--ink); color: #fff; border-color: var(--ink); }
 details summary { cursor: pointer; color: var(--accent); }
 
-/* Clickable gift cards: photo and title open the product in the shop */
-a.gift-frame { display: block; color: inherit; }
-.gift-name a.shop-link { color: inherit; }
-.gift.has-link .gift-frame { cursor: pointer; transition: transform .15s ease; }
-.gift.has-link .gift-frame:hover { transform: translateY(-3px) rotate(-.4deg); text-decoration: none; }
-.gift.has-link .gift-name a:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* Clickable gift cards: the owner edits the gift, a guest opens it in the shop */
+.gift-frame.card-action { display: block; width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; transition: transform .15s ease; }
+.gift-frame.card-action:hover { transform: translateY(-3px) rotate(-.4deg); text-decoration: none; }
+.gift-frame.card-action:focus-visible, .gift-name-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.gift-name-action { all: unset; cursor: pointer; }
+.gift-name-action:hover { text-decoration: underline; text-underline-offset: 3px; }

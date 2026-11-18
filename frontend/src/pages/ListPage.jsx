@@ -67,24 +67,26 @@ function ItemMedia({ item }) {
 }
 
 // One numbered card in the "gift guide" grid. `children` are the actions under the caption.
-// A link to the product in the shop (new tab), or a plain block when the item has no link.
-function ShopLink({ url, className, label, children }) {
-  return url ? (
-    <a className={`${className} shop-link`} href={url} target="_blank" rel="noreferrer" aria-label={label}>{children}</a>
-  ) : <div className={className}>{children}</div>;
+// What a click on the photo or the title does: the owner edits the gift (`onEdit`), a guest opens the
+// product in the shop (new tab). Without either it is a plain block.
+function CardAction({ item, onEdit, className, label, children }) {
+  if (onEdit) return <button type="button" className={`${className} card-action`} onClick={onEdit} aria-label={label}>{children}</button>;
+  if (item.url) return <a className={`${className} card-action`} href={item.url} target="_blank" rel="noreferrer" aria-label={label}>{children}</a>;
+  return <div className={className}>{children}</div>;
 }
 
-// The photo and the title open the product in the shop; buttons below keep working as before.
-function GiftCard({ n, item, taken, stamp, children }) {
+function GiftCard({ n, item, taken, stamp, onEdit, children }) {
+  const clickable = !!onEdit || !!item.url;
+  const label = onEdit ? `Edit “${item.title}”` : `Open “${item.title}” in the shop`;
   return (
-    <article className={`gift ${taken ? 'taken' : ''} ${item.url ? 'has-link' : ''}`}>
-      <ShopLink url={item.url} className="gift-frame" label={`Open “${item.title}” in the shop`}>
+    <article className={`gift ${taken ? 'taken' : ''} ${clickable ? 'clickable' : ''}`}>
+      <CardAction item={item} onEdit={onEdit} className="gift-frame" label={label}>
         <span className="gift-no">{n}</span>
         <ItemMedia item={item} />
         {stamp && <span className="stamp">{stamp}</span>}
-      </ShopLink>
+      </CardAction>
       <h3 className="gift-name" title={item.title}>
-        {item.url ? <a className="shop-link" href={item.url} target="_blank" rel="noreferrer">#{item.title}</a> : `#${item.title}`}
+        {clickable ? <CardAction item={item} onEdit={onEdit} className="gift-name-action">#{item.title}</CardAction> : `#${item.title}`}
       </h3>
       <div className="price">{item.price !== null ? money(item.price, item.currency) : '\u00a0'}</div>
       {item.chipIn && <span className="tag">Chip-in gift</span>}
@@ -150,10 +152,9 @@ function OwnerView({ data, reload }) {
         {data.items.map((it, idx) => editing === it.id ? (
           <ItemForm key={it.id} item={it} onDone={() => { setEditing(null); reload(); }} onCancel={() => setEditing(null)} />
         ) : (
-          <GiftCard key={it.id} n={idx + 1} item={it}>
+          <GiftCard key={it.id} n={idx + 1} item={it} onEdit={() => setEditing(it.id)}>
             <div className="row">
               {it.url && <a href={it.url} target="_blank" rel="noreferrer">Open in shop ↗</a>}
-              <button className="link" onClick={() => setEditing(it.id)}>Edit</button>
               <button className="link danger" onClick={() => removeItem(it.id)}>Remove</button>
             </div>
           </GiftCard>
