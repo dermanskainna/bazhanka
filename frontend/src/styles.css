@@ -307,3 +307,45 @@ section > .row.between { margin-top: 24px; }
 .bookmarklet { cursor: grab; text-transform: none; letter-spacing: .02em; font-size: .95rem; }
 .bookmarklet:active { cursor: grabbing; }
 kbd { font-family: var(--mono); font-size: .8em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: #fff; }
+/* Neutral hint (not an error), in the site's own hand-made style: sage like the Santa card,
+   wobbly corners like .notice, a Caveat accent and a mono pill like .tag. */
+.manual-help { display: flex; gap: 12px; align-items: flex-start; background: var(--sage); color: var(--forest); padding: 12px 16px;
+  border-radius: 4px 6px 3px 5px / 6px 3px 5px 4px; }
+.manual-help-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%;
+  background: #fff; color: var(--forest); margin-top: 2px; }
+.manual-help p { margin: 0; }
+.manual-help-title { font-size: .95rem; }
+.manual-help-title .script { font-family: "Caveat", cursive; font-size: 1.45rem; font-weight: 700; line-height: 1; margin-right: 4px; }
+.manual-help-tip { margin-top: 4px !important; font-size: .88rem; color: #3d5a52; }
+.manual-help-tip a { color: var(--forest); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.tip-tag { display: inline-block; font-family: var(--mono); font-size: .66rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  background: #fff; color: var(--forest); padding: 1px 8px; border-radius: 99px; margin-right: 4px; vertical-align: 1px; }
+.field-error { color: var(--accent); }
+.browser-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-tab { font: inherit; font-size: .85rem; border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.chip-tab.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+details summary { cursor: pointer; color: var(--accent); }
+
+/* Clickable gift cards: the owner edits the gift, a guest opens it in the shop */
+.gift-frame.card-action { display: block; width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; transition: transform .15s ease; }
+.gift-frame.card-action:hover { transform: translateY(-3px) rotate(-.4deg); text-decoration: none; }
+.gift-frame.card-action:focus-visible, .gift-name-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.gift-name-action { all: unset; cursor: pointer; }
+.gift-name-action:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Own page for editing one gift */
+.page.narrow-wide { max-width: 640px; }
+.back-link { display: inline-block; font-family: var(--mono); font-size: .78rem; letter-spacing: .04em; margin-bottom: 4px; }
+
+/* "Delete this wishlist": visible, but clearly separate from the gifts */
+.danger-zone { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 40px; padding-top: 24px; border-top: 1.5px dashed var(--line); text-align: center; }
+.btn.danger-btn { background: transparent; color: var(--accent); border: 2px solid var(--accent); border-radius: 3px 5px 2px 6px / 5px 2px 6px 3px; }
+.btn.danger-btn:hover { background: var(--accent); color: #fff; }
+
+/* Own photo upload in the gift form */
+.photo-field { display: flex; flex-direction: column; gap: 8px; }
+.field-label { font-family: var(--mono); font-size: .74rem; letter-spacing: .07em; text-transform: uppercase; color: #5b4f49; }
+.upload-btn { position: relative; cursor: pointer; }
+.upload-btn input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.upload-btn.busy { opacity: .6; cursor: progress; }
+.upload-btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
