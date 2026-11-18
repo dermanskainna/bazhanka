@@ -19,7 +19,7 @@ function ManualHelp({ url, reason }) {
   return (
     <div className="manual-help" role="status">
       <strong>{headline}</strong>
-      <p>That happens with many shops and your link is fine — it’s kept below. Add the title and price yourself, or:</p>
+      <p>That happens with many shops and nothing is wrong with your link. Add the title and price yourself, or:</p>
       {buttonUsed() ? (
         <p>open the product in the shop and press <b>+ Bazhanka</b> on your bookmarks bar — it fills in everything.</p>
       ) : (
