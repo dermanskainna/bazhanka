@@ -121,7 +121,6 @@ aws-deploy-backend: aws-push
 				"DbPassword=$(AWS_DB_PASSWORD)" \
 				"JwtSecret=$(AWS_JWT_SECRET)" \
 				"AdminEmails=$(AWS_ADMIN_EMAILS)" \
-				"SerperApiKey=$(AWS_SERPER_API_KEY)" \
 				"DonationUrl=$(AWS_DONATION_URL)" \
 				"DonationLabel=$(or $(AWS_DONATION_LABEL),Support a volunteer cause)"
 	@$(MAKE) --no-print-directory aws-url

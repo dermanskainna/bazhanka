@@ -1,6 +1,5 @@
 import crypto from 'node:crypto';
-import { converseWithWebSearch, hasAwsCredentials } from './bedrock.js';
-import { shoppingSearch, webSearch, serperKey } from './serper.js';
+import { converseWithWebSearch } from './bedrock.js';
 import { fetchPreview } from './preview.js';
 import { httpUrl } from './util.js';
 
@@ -45,12 +44,6 @@ export const REGIONS = {
     ],
   },
 };
-// 'serper' (Google results + a cheap AI planner, default when SERPER_API_KEY is set) or 'nova' (Bedrock web grounding).
-export const provider = (override) => {
-  const v = override || process.env.DISCOVER_PROVIDER;
-  if (v === 'serper' || v === 'nova') return v;
-  return serperKey() ? 'serper' : 'nova';
-};
 export const country = () => (REGIONS[process.env.DISCOVER_COUNTRY] ? process.env.DISCOVER_COUNTRY : 'UA');
 
 // Foreign marketplaces that dominated the results for Ukrainian users and are not useful gifts there.
@@ -84,11 +77,11 @@ export function titlesAgree(a, b) {
 }
 
 // Version prefix: bump it whenever the pipeline changes so old (possibly wrong) cached results die.
-const CACHE_VERSION = 'v4';
-export function cacheKey({ interests, budget, currency, provider: pv }) {
+const CACHE_VERSION = 'v3';
+export function cacheKey({ interests, budget, currency }) {
   const norm = String(interests).toLowerCase().replace(/[^\p{L}\p{N}\s,]/gu, ' ').split(/[\s,]+/).filter(Boolean).sort().join(' ');
   const b = budget ? Math.ceil(Number(budget) / 500) * 500 : 0; // coarse buckets so near-identical budgets share a cache entry
-  return crypto.createHash('sha256').update(`${CACHE_VERSION}|${provider(pv)}|${country()}|${norm}|${b}|${currency}`).digest('hex').slice(0, 40);
+  return crypto.createHash('sha256').update(`${CACHE_VERSION}|${country()}|${norm}|${b}|${currency}`).digest('hex').slice(0, 40);
 }
 
 // ---------- prompt ----------
@@ -261,11 +254,6 @@ const SECOND_ROUND_BEFORE_MS = 20_000;
 // `debug` (optional) is filled with counters so an admin can see where candidates disappear.
 export async function searchOffers(params, partners, debug = {}) {
   if (process.env.DISCOVER_MOCK === 'true') return mockOffers(params);
-  debug.provider = provider(params.provider);
-  return debug.provider === 'serper' ? searchSerper(params, partners, debug) : searchNova(params, partners, debug);
-}
-
-async function searchNova(params, partners, debug) {
   const started = Date.now();
   const kept = new Map(); // url -> offer
   const failed = [];
@@ -319,138 +307,4 @@ function mockOffers({ interests }) {
   return base.map(([title, url, fit, price]) => ({
     title, url, fit, why: `Matches “${String(interests).slice(0, 40)}”`, imageUrl: null, price, currency: 'UAH', verified: true,
   }));
-}
-
-
-// ---------- Google-based pipeline (serper) ----------
-
-const PLAN_SYSTEM = `You turn a gift request into Google Shopping search queries for online shops in Ukraine.
-Reply with ONLY a JSON array of 4 objects: {"q": string, "fit": "direct" | "adjacent"}.
-- 3 objects "direct": concrete products that clearly match the interests (a product type, optionally with a brand or feature).
-- 1 object "adjacent": a different product category that someone with these interests would still enjoy.
-Write queries in Ukrainian, 2-5 words each, with no shop names, no prices and no quotes.`;
-
-// Asks the model for product search queries; falls back to the user's own words when the model is unavailable.
-export async function planQueries({ interests }, debug = {}) {
-  const fallback = () => String(interests).split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean).slice(0, 4).map((q) => ({ q, fit: 'direct' }));
-  if (!hasAwsCredentials()) { debug.planner = 'fallback: no AWS credentials'; return fallback(); }
-  try {
-    const res = await converseWithWebSearch({ system: PLAN_SYSTEM, prompt: `Gift request: ${interests}`, maxTokens: 400, timeoutMs: 15_000, grounding: false });
-    const plan = parseCandidatesPlan(res.text);
-    if (plan.length) { debug.planner = 'ai'; return plan; }
-    debug.planner = `fallback: unreadable reply ${res.text.slice(0, 120)}`;
-  } catch (e) {
-    debug.planner = `fallback: ${e.message}`.slice(0, 200);
-  }
-  return fallback();
-}
-
-export function parseCandidatesPlan(text) {
-  const a = text.indexOf('['), b = text.lastIndexOf(']');
-  let arr = [];
-  try { arr = JSON.parse(text.slice(a, b + 1)); } catch { arr = []; }
-  return (Array.isArray(arr) ? arr : [])
-    .map((x) => ({ q: typeof x?.q === 'string' ? x.q.replace(/\s+/g, ' ').trim().slice(0, 80) : '', fit: x?.fit === 'adjacent' ? 'adjacent' : 'direct' }))
-    .filter((x) => x.q.length >= 2).slice(0, 5);
-}
-
-const isGoogleHost = (h) => !!h && /(^|\.)google\.[a-z.]+$/.test(h);
-// google.com/goto?url=https%3A%2F%2Fshop... carries the real address only when it is a plain URL.
-export function unwrapGoogle(u) {
-  try {
-    const x = new URL(u);
-    if (isGoogleHost(x.hostname) && /^\/(goto|url)$/.test(x.pathname)) {
-      const inner = x.searchParams.get('url') || x.searchParams.get('q');
-      if (inner && /^https?:\/\//i.test(inner)) return inner;
-    }
-  } catch { /* not a URL */ }
-  return u;
-}
-const MAX_PER_SHOP = 3;
-const MAX_RESULTS = 12;
-
-// Turns raw Google Shopping listings into offers: real merchant links only, relevant budget, varied shops.
-export function shoppingToOffers(listings, fit, { budget, currency }, stats = {}) {
-  const out = [];
-  for (const l of listings) {
-    const url = httpUrl(unwrapGoogle(l.url));
-    const host = hostOf(url);
-    if (!url || !l.title) { stats.badListing = (stats.badListing || 0) + 1; continue; }
-    if (isGoogleHost(host)) { stats.googleRedirect = (stats.googleRedirect || 0) + 1; continue; }
-    if (isPlaceholderHost(host) || isForeignMarketplace(host)) { stats.blockedShop = (stats.blockedShop || 0) + 1; continue; }
-    if (budget && l.price && (l.currency || 'UAH') === currency && l.price > budget * 1.15) { stats.overBudget = (stats.overBudget || 0) + 1; continue; }
-    out.push({ title: l.title, url, fit, why: '', shop: l.shop || null, imageUrl: l.imageUrl || null, price: l.price || null, currency: l.price ? l.currency || (/\.ua$/.test(host) ? 'UAH' : null) : null, verified: true });
-  }
-  return out;
-}
-
-export function diversify(offers) {
-  const perShop = new Map();
-  const seen = new Set();
-  const out = [];
-  for (const o of offers) {
-    const key = normalizeUrl(o.url);
-    const shop = hostOf(o.url);
-    if (!key || seen.has(key)) continue;
-    if ((perShop.get(shop) || 0) >= MAX_PER_SHOP) continue;
-    seen.add(key);
-    perShop.set(shop, (perShop.get(shop) || 0) + 1);
-    out.push(o);
-    if (out.length >= MAX_RESULTS) break;
-  }
-  return out;
-}
-
-export async function searchSerper(params, partners, debug = {}, deps = {}) {
-  const shopping = deps.shoppingSearch || shoppingSearch;
-  const web = deps.webSearch || webSearch;
-  const fetcher = deps.fetcher || fetchPreview;
-  const started = Date.now();
-  const gl = country().toLowerCase();
-  const plan = await (deps.planQueries || planQueries)(params, debug);
-  debug.plan = plan;
-  const stats = debug.stats = {};
-
-  // 1. Google Shopping: every listing already has title + link + price + photo of the same product.
-  const settled = await Promise.allSettled(plan.map((p) => shopping(p.q, { gl, hl: gl === 'ua' ? 'uk' : 'en' })));
-  let offers = [];
-  const errors = [];
-  settled.forEach((r, i) => {
-    if (r.status === 'rejected') { errors.push(r.reason.message); return; }
-    stats.listings = (stats.listings || 0) + r.value.length;
-    if (i === 0 && r.value[0]) debug.sampleListing = r.value[0];
-    offers.push(...shoppingToOffers(r.value, plan[i].fit, params, stats));
-  });
-  if (errors.length === plan.length) throw Object.assign(new Error(errors[0]), { kind: 'search' });
-  if (errors.length) debug.errors = errors;
-  offers = diversify(offers);
-  stats.fromShopping = offers.length;
-
-  // 2. Too few (or partner shops to include): look inside shops with ordinary results and check the pages.
-  const active = partners.filter((p) => p.active).slice(0, 2);
-  const direct = plan.find((p) => p.fit === 'direct') || plan[0];
-  if ((offers.length < 6 || active.length) && direct) {
-    const queries = [...active.map((p) => ({ q: `site:${p.domain} ${direct.q}`, fit: 'direct' }))];
-    if (offers.length < 6) queries.push({ q: `${direct.q} купити`, fit: 'direct' });
-    const found = await Promise.allSettled(queries.map((x) => web(x.q, { gl, hl: gl === 'ua' ? 'uk' : 'en' })));
-    const candidates = [];
-    const urls = new Set();
-    found.forEach((r, i) => {
-      if (r.status !== 'fulfilled') { (debug.errors ||= []).push(r.reason.message); return; }
-      for (const x of r.value) {
-        const u = httpUrl(x.url), h = hostOf(u);
-        if (!u || isGoogleHost(h) || isPlaceholderHost(h) || isForeignMarketplace(h)) continue;
-        urls.add(normalizeUrl(u));
-        candidates.push({ title: x.title, url: u, fit: queries[i].fit, why: '', seenPrice: null, seenCurrency: null });
-      }
-    });
-    const vstats = debug.verifyStats = {};
-    const checked = await verifyCandidates(candidates.slice(0, 12), { sourceUrls: urls, fetcher }, vstats);
-    offers = diversify([...offers, ...checked.filter((c) => !offers.some((o) => normalizeUrl(o.url) === normalizeUrl(c.url)))]);
-  }
-
-  debug.kept = offers.length;
-  debug.ms = Date.now() - started;
-  console.log('discover(serper):', JSON.stringify({ ms: debug.ms, plan: plan.map((p) => p.q), stats, verify: debug.verifyStats, kept: offers.length }));
-  return offers;
 }

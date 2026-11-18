@@ -72,17 +72,6 @@ Parameters:
     Default: 5
     Description: Fresh (non-cached) searches per user per day, a cost guard
 
-  DiscoverProvider:
-    Type: String
-    Default: ""
-    AllowedValues: ["", "serper", "nova"]
-    Description: Search engine for gift ideas. Empty = serper when SerperApiKey is set, else Nova web grounding
-  SerperApiKey:
-    Type: String
-    Default: ""
-    NoEcho: true
-    Description: API key from serper.dev (Google Shopping results, about 1 USD per 1000 searches)
-
 Conditions:
   HasDbEngineVersion: !Not [!Equals [!Ref DbEngineVersion, ""]]
 
@@ -331,8 +320,6 @@ Resources:
           DISCOVER_ENABLED: !Ref DiscoverEnabled
           DISCOVER_MODEL_ID: !Ref DiscoverModelId
           DISCOVER_DAILY_LIMIT: !Ref DiscoverDailyLimit
-          DISCOVER_PROVIDER: !Ref DiscoverProvider
-          SERPER_API_KEY: !Ref SerperApiKey
           BEDROCK_REGION: !Ref "AWS::Region"
       Tags:
         - Key: PROJECT_NAME
