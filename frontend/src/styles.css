@@ -368,3 +368,5 @@ details summary { cursor: pointer; color: var(--accent); }
 details.meta-text summary { font-family: var(--mono); }
 details.meta-text p { margin: 8px 0 0; }
 .lead.meta-text { max-width: none; }
+/* Secret Santa group name, like a wishlist title */
+.santa-title { font-family: "Italiana", Georgia, serif; font-weight: 400; text-transform: uppercase; letter-spacing: .04em; color: var(--accent); font-size: clamp(2rem, 6vw, 3rem); line-height: 1.05; margin: .15em 0; overflow-wrap: anywhere; }
