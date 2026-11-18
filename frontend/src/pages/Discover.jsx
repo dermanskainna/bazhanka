@@ -10,6 +10,7 @@ const NOVELTY = [
   { id: 'surprise', title: 'Surprise me', hint: 'Half of the ideas are new for them' },
 ];
 const WHO = [['', 'Anyone'], ['woman', 'Woman'], ['man', 'Man'], ['girl', 'Girl'], ['boy', 'Boy'], ['teenager', 'Teenager'], ['colleague', 'Colleague'], ['parents', 'Parents'], ['couple', 'Couple']];
+const AGE = [['', 'Any age'], ['0-2', '0–2'], ['3-6', '3–6'], ['7-12', '7–12'], ['13-17', '13–17'], ['18-30', '18–30'], ['31-50', '31–50'], ['50+', '50+']];
 const OCCASION = [['', 'Any occasion'], ['birthday', 'Birthday'], ['new year', 'New Year'], ['wedding', 'Wedding'], ['housewarming', 'Housewarming'], ['thank you', 'Thank you'], ["valentine's day", "Valentine's Day"], ['just because', 'Just because']];
 
 function Badge({ offer }) {
@@ -87,6 +88,7 @@ export default function Discover() {
   const [budgetMin, setBudgetMin] = useState('');
   const [novelty, setNovelty] = useState('mixed');
   const [who, setWho] = useState('');
+  const [age, setAge] = useState('');
   const [occasion, setOccasion] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -109,7 +111,7 @@ export default function Discover() {
     setBusy(true);
     setError('');
     try {
-      const d = await api('/discover/search', { method: 'POST', body: { interests, budget: budget || undefined, budgetMin: budgetMin || undefined, novelty, who: who || undefined, occasion: occasion || undefined } });
+      const d = await api('/discover/search', { method: 'POST', body: { interests, budget: budget || undefined, budgetMin: budgetMin || undefined, novelty, who: who || undefined, age: age || undefined, occasion: occasion || undefined } });
       setResult(d);
       setRemaining(d.remaining);
     } catch (err) {
@@ -151,16 +153,19 @@ export default function Discover() {
           <label>Recipient
             <select value={who} onChange={(e) => setWho(e.target.value)}>{WHO.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
           </label>
-          <label>Occasion
-            <select value={occasion} onChange={(e) => setOccasion(e.target.value)}>{OCCASION.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
+          <label>Age
+            <select value={age} onChange={(e) => setAge(e.target.value)}>{AGE.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
           </label>
         </div>
+        <label>Occasion
+          <select value={occasion} onChange={(e) => setOccasion(e.target.value)}>{OCCASION.map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
+        </label>
         <div className="grid2">
-          <label>Price from, ₴ <small className="muted">(optional)</small>
-            <input type="number" min="0" step="50" value={budgetMin} onChange={(e) => setBudgetMin(e.target.value)} placeholder="200" />
+          <label className="range">Price from <output>{budgetMin ? `${budgetMin} ₴` : 'any'}</output>
+            <input type="range" min="0" max="5000" step="100" value={budgetMin || 0} onChange={(e) => setBudgetMin(Number(e.target.value) ? e.target.value : '')} />
           </label>
-          <label>Price up to, ₴ <small className="muted">(optional)</small>
-            <input type="number" min="0" step="50" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="1500" />
+          <label className="range">Price up to <output>{budget ? `${budget} ₴` : 'any'}</output>
+            <input type="range" min="0" max="10000" step="100" value={budget || 0} onChange={(e) => setBudget(Number(e.target.value) ? e.target.value : '')} />
           </label>
         </div>
         <label>Add ideas to

@@ -166,27 +166,29 @@ test('shopping listings: real shop links only, budget respected, shops varied', 
   assert.deepEqual(parseCandidatesPlan('```json\n[{"q":"кавомолка","fit":"direct"},{"q":"чай","fit":"adjacent"},{"q":""}]```').map((x) => x.fit), ['direct', 'adjacent']);
 });
 
-test('serper pipeline: Google listings first, page-checked web results as fallback', async () => {
+test('serper pipeline: checked shop pages first, Google listings fill the gap', async () => {
   const debug = {};
   const out = await searchSerper({ interests: 'кава', budget: null, currency: 'UAH' }, [], debug, {
     planQueries: async () => [{ q: 'кавомолка', fit: 'direct', for: 'кава' }, { q: 'чай', fit: 'adjacent', for: 'чай' }],
-    shoppingSearch: async (q) => [{ title: `${q} 1`, shop: 'Rozetka', url: `https://rozetka.com.ua/${q}/p1/`, price: 700, currency: 'UAH', imageUrl: 'https://i/1.jpg' }],
-    webSearch: async () => [{ title: 'Кавомолка Hario', url: 'https://shop-a.com.ua/p/1' }, { title: 'x', url: 'https://www.example.com/p' }],
-    fetcher: async (u) => ({ title: 'Кавомолка Hario', url: u, price: 900, currency: 'UAH', isProduct: true }),
+    webSearch: async (q) => [{ title: 'Кавомолка Hario', url: `https://shop-${encodeURIComponent(q.split(' ')[0])}.com.ua/p/1` }, { title: 'x', url: 'https://www.example.com/p' }, { title: 'Категорія', url: `https://cat-${encodeURIComponent(q.split(' ')[0])}.com.ua/c` }],
+    fetcher: async (u) => (u.includes('//cat-') ? { title: 'Категорія', url: u, isProduct: false } : { title: 'Кавомолка Hario', url: u, price: 900, currency: 'UAH', isProduct: true }),
+    shoppingSearch: async (q) => [{ title: `${q} Google`, shop: 'Molodo', url: 'https://www.google.com/search?ibp=oshop&q=' + encodeURIComponent(q), price: 500, currency: 'UAH' }],
   });
-  assert.equal(out.length, 3);
-  assert.equal(out.find((o) => o.fit === 'adjacent').shop, 'Rozetka');
-  assert.ok(out.some((o) => o.url === 'https://shop-a.com.ua/p/1' && o.price === 900));
-  assert.equal(debug.stats.fromShopping, 2);
-  assert.equal(out.find((o) => o.fit === 'adjacent').via, 'чай');
+  assert.equal(debug.verifyStats.notProduct, 2);
+  const pages = out.filter((o) => !o.viaGoogle);
+  assert.equal(pages.length, 2);
+  assert.ok(pages.every((o) => o.verified && o.price === 900));
+  assert.ok(out.some((o) => o.viaGoogle && o.shop === 'Molodo'), 'too few pages: Google listings added');
+  assert.equal(out.find((o) => o.fit === 'adjacent' && !o.viaGoogle).via, 'чай');
 });
 
 test('serper pipeline: every interest is represented, not only the first query', async () => {
-  const out = await searchSerper({ interests: 'свічки, малювання, чай, коти', budget: null, currency: 'UAH' }, [], {}, {
-    planQueries: async () => ['свічки', 'малювання', 'чай', 'коти'].map((q) => ({ q, fit: 'direct', for: q })),
-    shoppingSearch: async (q) => Array.from({ length: 8 }, (_, i) => ({ title: `${q} ${i}`, shop: `S${i}`, url: `https://shop${i}-${encodeURIComponent(q)}.com.ua/p/${i}/`, price: 300, currency: 'UAH' })),
-    webSearch: async () => [],
-    fetcher: async () => { throw new Error('x'); },
+  const qs = ['свічки', 'малювання', 'чай', 'коти'];
+  const out = await searchSerper({ interests: qs.join(', '), budget: null, currency: 'UAH' }, [], {}, {
+    planQueries: async () => qs.map((q) => ({ q, fit: 'direct', for: q })),
+    webSearch: async (q) => Array.from({ length: 5 }, (_, i) => ({ title: `${q} ${i}`, url: `https://s${i}-${encodeURIComponent(q.split(' ')[0])}.com.ua/p/${i}/` })),
+    fetcher: async (u) => ({ title: 'Товар ' + u, url: u, price: 300, currency: 'UAH', isProduct: true }),
+    shoppingSearch: async () => [],
   });
   assert.deepEqual([...new Set(out.map((o) => o.via))].sort(), ['коти', 'малювання', 'свічки', 'чай']);
 });

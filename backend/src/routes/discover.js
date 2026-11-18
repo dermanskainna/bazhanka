@@ -14,6 +14,7 @@ const enabled = () => process.env.DISCOVER_ENABLED !== 'false' && (process.env.D
 
 // Options of the search form, shared by the user search and the admin tester.
 const WHO = ['woman', 'man', 'girl', 'boy', 'teenager', 'colleague', 'parents', 'couple'];
+const AGE = ['0-2', '3-6', '7-12', '13-17', '18-30', '31-50', '50+'];
 const OCCASION = ['birthday', 'new year', 'wedding', 'housewarming', 'thank you', "valentine's day", 'just because'];
 function searchOptions(body) {
   const pick = (v, list) => (list.includes(v) ? v : '');
@@ -22,6 +23,7 @@ function searchOptions(body) {
     budgetMin: num(body.budgetMin) || null,
     novelty: NOVELTY.includes(body.novelty) ? body.novelty : 'mixed',
     who: pick(body.who, WHO),
+    age: pick(body.age, AGE),
     occasion: pick(body.occasion, OCCASION),
   };
 }

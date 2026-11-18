@@ -85,10 +85,10 @@ export function titlesAgree(a, b) {
 
 // Version prefix: bump it whenever the pipeline changes so old (possibly wrong) cached results die.
 const CACHE_VERSION = 'v4';
-export function cacheKey({ interests, budget, budgetMin, currency, provider: pv, novelty, who, occasion }) {
+export function cacheKey({ interests, budget, budgetMin, currency, provider: pv, novelty, who, age, occasion }) {
   const norm = String(interests).toLowerCase().replace(/[^\p{L}\p{N}\s,]/gu, ' ').split(/[\s,]+/).filter(Boolean).sort().join(' ');
   const b = budget ? Math.ceil(Number(budget) / 500) * 500 : 0; // coarse buckets so near-identical budgets share a cache entry
-  return crypto.createHash('sha256').update(`${CACHE_VERSION}|${provider(pv)}|${country()}|${norm}|${b}|${budgetMin || 0}|${currency}|${novelty || 'mixed'}|${who || ''}|${occasion || ''}`).digest('hex').slice(0, 40);
+  return crypto.createHash('sha256').update(`${CACHE_VERSION}|${provider(pv)}|${country()}|${norm}|${b}|${budgetMin || 0}|${currency}|${novelty || 'mixed'}|${who || ''}|${age || ''}|${occasion || ''}`).digest('hex').slice(0, 40);
 }
 
 // ---------- prompt ----------
@@ -233,7 +233,7 @@ export async function verifyCandidates(candidates, { sourceUrls = new Set(), fet
     if (!p.title) return drop(c, 'noTitle');
     const asked = new URL(c.url), got = new URL(p.url || c.url);
     if (got.pathname.replace(/\/+$/, '') === '' && asked.pathname.replace(/\/+$/, '') !== '') return drop(c, 'redirectedHome');
-    if (!p.isProduct && !fromSearch) return drop(c, 'notProduct');
+    if (!p.isProduct) return drop(c, 'notProduct');
     const agree = titlesAgree(c.title, p.title);
     if (!agree && !fromSearch) return drop(c, 'titleMismatch');
     stats.verified = (stats.verified || 0) + 1;
@@ -340,9 +340,10 @@ ${adjacent ? `- ${adjacent} objects "adjacent": a NEW discovery - a different pr
 Prefer gifts over everyday items; respect the recipient and occasion when they are given.`;
 }
 
-function planPrompt({ interests, who, occasion }) {
+function planPrompt({ interests, who, age, occasion }) {
   const lines = [`Description: ${interests}`];
   if (who) lines.push(`Recipient: ${who}`);
+  if (age) lines.push(`Age: ${age} (choose products that suit this age)`);
   if (occasion) lines.push(`Occasion: ${occasion}`);
   return lines.join('\n');
 }
@@ -397,19 +398,20 @@ const MAX_RESULTS = 15;
 const PER_QUERY = 6;
 
 // Turns raw Google Shopping listings into offers: real merchant links only, price inside the budget.
-export function shoppingToOffers(listings, fit, { budget, budgetMin, currency }, stats = {}, via = null) {
+export function shoppingToOffers(listings, fit, { budget, budgetMin, currency }, stats = {}, via = null, { allowGoogle = false } = {}) {
   const out = [];
   for (const l of listings) {
     const url = httpUrl(unwrapGoogle(l.url));
     const host = hostOf(url);
     if (!url || !l.title) { stats.badListing = (stats.badListing || 0) + 1; continue; }
-    if (isGoogleHost(host)) { stats.googleRedirect = (stats.googleRedirect || 0) + 1; continue; }
+    const viaGoogle = isGoogleHost(host);
+    if (viaGoogle && !allowGoogle) { stats.googleRedirect = (stats.googleRedirect || 0) + 1; continue; }
     if (isPlaceholderHost(host) || isForeignMarketplace(host)) { stats.blockedShop = (stats.blockedShop || 0) + 1; continue; }
     if (l.price && (l.currency || 'UAH') === currency) {
       if (budget && l.price > budget * 1.15) { stats.overBudget = (stats.overBudget || 0) + 1; continue; }
       if (budgetMin && l.price < budgetMin * 0.85) { stats.underBudget = (stats.underBudget || 0) + 1; continue; }
     }
-    out.push({ title: l.title, url, fit, why: '', via, shop: l.shop || null, imageUrl: l.imageUrl || null, price: l.price || null, currency: l.price ? l.currency || (/\.ua$/.test(host) ? 'UAH' : null) : null, verified: true });
+    out.push({ title: l.title, url, fit, why: '', via, viaGoogle: viaGoogle || undefined, shop: l.shop || null, imageUrl: l.imageUrl || null, price: l.price || null, currency: l.price ? l.currency || (/\.ua$/.test(host) ? 'UAH' : null) : null, verified: true });
   }
   return out;
 }
@@ -429,7 +431,7 @@ export function diversify(offers, max = MAX_RESULTS) {
   const out = [];
   for (const o of offers) {
     const key = normalizeUrl(o.url);
-    const shop = hostOf(o.url);
+    const shop = o.viaGoogle ? `g:${o.shop}` : hostOf(o.url);
     if (!key || seen.has(key)) continue;
     if ((perShop.get(shop) || 0) >= MAX_PER_SHOP) continue;
     seen.add(key);
@@ -439,6 +441,17 @@ export function diversify(offers, max = MAX_RESULTS) {
   }
   return out;
 }
+
+export function applyBudget(offers, { budget, budgetMin, currency }, stats = {}) {
+  return offers.filter((o) => {
+    if (!o.price || (o.currency || 'UAH') !== currency) return true;
+    if (budget && o.price > budget * 1.15) { stats.overBudget = (stats.overBudget || 0) + 1; return false; }
+    if (budgetMin && o.price < budgetMin * 0.85) { stats.underBudget = (stats.underBudget || 0) + 1; return false; }
+    return true;
+  });
+}
+
+const WANT = 8; // below this many shop pages, Google Shopping listings fill the gap
 
 export async function searchSerper(params, partners, debug = {}, deps = {}) {
   const shopping = deps.shoppingSearch || shoppingSearch;
@@ -451,44 +464,56 @@ export async function searchSerper(params, partners, debug = {}, deps = {}) {
   debug.plan = plan;
   const stats = debug.stats = {};
 
-  // 1. Google Shopping: every listing already has title + link + price + photo of the same product.
-  const settled = await Promise.allSettled(plan.map((p) => shopping(p.q, { gl, hl })));
-  const groups = [];
-  const errors = [];
-  settled.forEach((r, i) => {
-    if (r.status === 'rejected') { errors.push(r.reason.message); groups.push([]); return; }
-    stats.listings = (stats.listings || 0) + r.value.length;
-    if (i === 0 && r.value[0]) debug.sampleListing = r.value[0];
-    groups.push(shoppingToOffers(r.value, plan[i].fit, params, stats, plan[i].for || plan[i].q));
-  });
-  if (errors.length === plan.length) throw Object.assign(new Error(errors[0]), { kind: 'search' });
-  if (errors.length) debug.errors = errors;
-  debug.perQuery = plan.map((p, i) => `${p.fit}: ${p.q} -> ${groups[i].length}`);
-  let offers = diversify(roundRobin(groups));
-  stats.fromShopping = offers.length;
-
-  // 2. Too few (or partner shops to include): look inside shops with ordinary results and check the pages.
+  // 1. Ordinary Google results for EVERY planned query (+ partner shops): these are links to real shops.
   const active = partners.filter((p) => p.active).slice(0, 2);
   const direct = plan.find((p) => p.fit === 'direct') || plan[0];
-  if ((offers.length < 6 || active.length) && direct) {
-    const queries = active.map((p) => ({ q: `site:${p.domain} ${direct.q}`, fit: 'direct', via: direct.for || direct.q }));
-    if (offers.length < 6) queries.push({ q: `${direct.q} купити`, fit: 'direct', via: direct.for || direct.q });
-    const found = await Promise.allSettled(queries.map((x) => web(x.q, { gl, hl })));
-    const candidates = [];
-    const urls = new Set();
-    found.forEach((r, i) => {
-      if (r.status !== 'fulfilled') { (debug.errors ||= []).push(r.reason.message); return; }
-      for (const x of r.value) {
-        const u = httpUrl(x.url), h = hostOf(u);
-        if (!u || isGoogleHost(h) || isPlaceholderHost(h) || isForeignMarketplace(h)) continue;
-        urls.add(normalizeUrl(u));
-        candidates.push({ title: x.title, url: u, fit: queries[i].fit, why: '', via: queries[i].via, seenPrice: null, seenCurrency: null });
-      }
+  const queries = plan.map((p, i) => ({ q: `${p.q} купити`, plan: i }));
+  if (direct) active.forEach((p) => queries.push({ q: `site:${p.domain} ${direct.q}`, plan: plan.indexOf(direct) }));
+  const found = await Promise.allSettled(queries.map((x) => web(x.q, { gl, hl })));
+  const errors = [];
+  const candidates = [];
+  const groupOf = new Map();
+  const seen = new Set();
+  found.forEach((r, i) => {
+    if (r.status !== 'fulfilled') { errors.push(r.reason.message); return; }
+    const pl = plan[queries[i].plan];
+    let n = 0;
+    for (const x of r.value) {
+      const u = httpUrl(x.url), h = hostOf(u);
+      if (!u || seen.has(normalizeUrl(u)) || isGoogleHost(h) || isPlaceholderHost(h) || isForeignMarketplace(h)) continue;
+      if (n++ >= 5) break;
+      seen.add(normalizeUrl(u));
+      groupOf.set(u, queries[i].plan);
+      candidates.push({ title: x.title, url: u, fit: pl.fit, why: '', via: pl.for || pl.q, seenPrice: null, seenCurrency: null });
+    }
+  });
+  stats.candidates = candidates.length;
+  const vstats = debug.verifyStats = {};
+  const checked = applyBudget(await verifyCandidates(candidates.slice(0, 30), { sourceUrls: new Set(candidates.map((c) => normalizeUrl(c.url))), fetcher }, vstats), params, stats);
+  const groups = plan.map(() => []);
+  for (const o of checked) groups[groupOf.get(o.url) ?? groupOf.get(candidates.find((c) => normalizeUrl(c.url) === normalizeUrl(o.url))?.url) ?? 0].push(o);
+  let offers = diversify(roundRobin(groups));
+  debug.perQuery = plan.map((p, i) => `${p.fit}: ${p.q} -> ${groups[i].length}`);
+  stats.fromPages = offers.length;
+
+  // 2. Not enough shop pages: add Google Shopping listings (title, photo, price of the same product;
+  //    the link may lead to Google's product page that compares shops).
+  if (offers.length < WANT) {
+    const settled = await Promise.allSettled(plan.map((p) => shopping(p.q, { gl, hl })));
+    const lgroups = [];
+    settled.forEach((r, i) => {
+      if (r.status === 'rejected') { errors.push(r.reason.message); lgroups.push([]); return; }
+      stats.listings = (stats.listings || 0) + r.value.length;
+      if (i === 0 && r.value[0]) debug.sampleListing = r.value[0];
+      const items = r.value.filter((l) => l.url && l.title);
+      stats.badListing = (stats.badListing || 0) + r.value.length - items.length;
+      if (!debug.sampleBadListing) debug.sampleBadListing = r.value.find((l) => !l.url || !l.title);
+      lgroups.push(applyBudget(shoppingToOffers(items, plan[i].fit, params, stats, plan[i].for || plan[i].q, { allowGoogle: true }), params, stats));
     });
-    const vstats = debug.verifyStats = {};
-    const checked = await verifyCandidates(candidates.slice(0, 12), { sourceUrls: urls, fetcher }, vstats);
-    offers = diversify([...offers, ...checked.filter((c) => !offers.some((o) => normalizeUrl(o.url) === normalizeUrl(c.url)))]);
+    offers = diversify([...offers, ...roundRobin(lgroups, 3)].filter((o, i, all) => all.findIndex((x) => normalizeUrl(x.url) === normalizeUrl(o.url)) === i));
   }
+  if (errors.length) debug.errors = errors;
+  if (!offers.length && errors.length) throw Object.assign(new Error(errors[0]), { kind: 'search' });
 
   debug.kept = offers.length;
   debug.ms = Date.now() - started;
