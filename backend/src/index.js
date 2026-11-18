@@ -55,7 +55,7 @@ if (fs.existsSync(staticDir)) {
 app.use((err, _req, res, _next) => {
   const status = err.status || (err.type === 'entity.parse.failed' ? 400 : 500);
   if (status >= 500) console.error(err);
-  res.status(status).json({ error: status >= 500 ? 'Something went wrong on our side' : err.message });
+  res.status(status).json({ error: status >= 500 ? 'Something went wrong on our side' : err.message, ...(status < 500 && err.reason ? { reason: err.reason } : {}) });
 });
 
 const port = Number(process.env.PORT || 3000);

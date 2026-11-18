@@ -1,8 +1,33 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, money, niceDate } from '../api.js';
 import { useSession } from '../session.jsx';
 import { GiftIcon, LockIcon, AsteriskIcon, LinkIcon } from '../icons.jsx';
+
+// Set by /add once the "+ Bazhanka" browser button has been used in this browser.
+export const BUTTON_USED = 'bz:hasButton';
+const buttonUsed = () => { try { return localStorage.getItem(BUTTON_USED) === '1'; } catch { return false; } };
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return 'This shop'; } };
+
+// Shown when the server could not read the shop page. Not reading a page is normal (many shops don't
+// allow it), so this is a calm next step, not an error.
+function ManualHelp({ url, reason }) {
+  const host = hostOf(url);
+  const headline = reason === 'blocked' ? `${host} doesn’t share product details automatically`
+    : reason === 'unreachable' ? `We couldn’t reach ${host} right now`
+      : `We couldn’t pick up the details from ${host}`;
+  return (
+    <div className="manual-help" role="status">
+      <strong>{headline}</strong>
+      <p>That happens with many shops and your link is fine — it’s kept below. Add the title and price yourself, or:</p>
+      {buttonUsed() ? (
+        <p>open the product in the shop and press <b>+ Bazhanka</b> on your bookmarks bar — it fills in everything.</p>
+      ) : (
+        <p><Link to="/button" target="_blank">get the + Bazhanka button</Link> — it fills in title, photo and price from any shop page in one click.</p>
+      )}
+    </div>
+  );
+}
 
 const emptyItem = { url: '', title: '', imageUrl: '', price: '', currency: 'UAH', note: '', chipIn: false };
 
@@ -142,7 +167,10 @@ function OwnerView({ data, reload }) {
 // `initial` prefills a new item (used by the "+ Bazhanka" browser button page, /add).
 export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
   const [f, setF] = useState(item ? { ...emptyItem, ...item, price: item.price ?? '', imageUrl: item.imageUrl || '', url: item.url || '', note: item.note || '' } : { ...emptyItem, ...initial });
+  // '' | loading | ok | partial | button | manual (shop not readable) | missing (404) | bad (not a usable link)
   const [status, setStatus] = useState(initial?.title ? 'button' : '');
+  const [reason, setReason] = useState('');
+  const titleRef = useRef(null);
   const [error, setError] = useState('');
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
 
@@ -162,8 +190,10 @@ export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
       }));
       setStatus(preview.title ? 'ok' : 'partial');
     } catch (err) {
-      setStatus('failed');
-      setError(err.message);
+      setReason(err.reason || '');
+      if (err.reason === 'bad_link') { setStatus('bad'); setError(err.message); return; }
+      setStatus(err.reason === 'not_found' ? 'missing' : 'manual');
+      titleRef.current?.focus();
     }
   };
 
@@ -186,20 +216,19 @@ export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
         <input type="url" value={f.url} placeholder="https://rozetka.com.ua/…" onChange={set('url')}
           onPaste={(e) => { const t = e.clipboardData.getData('text'); setTimeout(() => fetchPreview(t.trim()), 0); }}
           onBlur={() => !item && !f.title && fetchPreview(f.url)} autoFocus={!item} />
-        <small className="muted">
-          {status === 'loading' ? 'Looking up the product…' : status === 'ok' ? 'Filled in from the shop — check it below.' :
-            status === 'partial' ? 'The shop shared only part of the details — please complete them.' :
-            status === 'failed' ? 'Could not read that page — fill the item in by hand.' :
-            status === 'button' ? 'Filled in from the shop page you opened — check it below.' : 'Paste a link and we try to fill in title, photo and price.'}
-        </small>
+        {status === 'bad' ? <small className="field-error">{error}</small> : (
+          <small className="muted">
+            {status === 'loading' ? 'Looking up the product…' : status === 'ok' ? 'Filled in from the shop — check it below.' :
+              status === 'partial' ? 'The shop shared only part of the details — please complete them.' :
+              status === 'manual' ? 'Link saved. Fill in the rest below.' :
+              status === 'missing' ? 'The shop says this page doesn’t exist. Check the link, or fill the item in by hand.' :
+              status === 'button' ? 'Filled in from the shop page you opened — check it below.' : 'Paste a link and we try to fill in title, photo and price.'}
+          </small>
+        )}
       </label>
-      {status === 'failed' && error && (
-        <p className="notice">
-          {error}. <Link to="/button">Use the “+ Bazhanka” browser button</Link> to fill it in from the shop page you have open.
-        </p>
-      )}
+      {status === 'manual' && <ManualHelp url={f.url} reason={reason} />}
       {f.imageUrl && <img className="preview-img" src={f.imageUrl} alt="" referrerPolicy="no-referrer" />}
-      <label>Title<input required value={f.title} onChange={set('title')} placeholder="What do you want?" /></label>
+      <label>Title<input ref={titleRef} required value={f.title} onChange={set('title')} placeholder="What do you want?" /></label>
       <div className="grid2">
         <label>Price<input inputMode="decimal" value={f.price} onChange={set('price')} placeholder="e.g. 1200" /></label>
         <label>Currency
@@ -209,7 +238,7 @@ export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
       <label>Photo link (optional)<input type="url" value={f.imageUrl} onChange={set('imageUrl')} /></label>
       <label>Note for friends (optional)<textarea rows={2} value={f.note} onChange={set('note')} placeholder="Size M, any colour except yellow" /></label>
       <label className="check"><input type="checkbox" checked={f.chipIn} onChange={set('chipIn')} /> Let several friends chip in on this gift</label>
-      {status !== 'failed' && error && <p className="error">{error}</p>}
+      {status !== 'bad' && error && <p className="error">{error}</p>}
       <div className="row"><button className="btn">{item ? 'Save' : 'Add to list'}</button><button type="button" className="btn ghost" onClick={onCancel}>Cancel</button></div>
     </form>
   );
