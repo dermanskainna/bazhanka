@@ -170,7 +170,7 @@ function OwnerView({ data, reload }) {
 // `initial` prefills a new item (used by the "+ Bazhanka" browser button page, /add).
 export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
   const [f, setF] = useState(item ? { ...emptyItem, ...item, price: item.price ?? '', imageUrl: item.imageUrl || '', url: item.url || '', note: item.note || '' } : { ...emptyItem, ...initial });
-  // '' | loading | ok | partial | button | manual (shop not readable) | missing (404) | bad (not a usable link)
+  // '' | loading | ok | button | manual (shop not readable, or read but without a title) | missing (404) | bad (not a usable link)
   const [status, setStatus] = useState(initial?.title ? 'button' : '');
   const titleRef = useRef(null);
   const [error, setError] = useState('');
@@ -204,7 +204,9 @@ export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
         price: cur.price || preview.price || '',
         currency: preview.currency || cur.currency,
       }));
-      setStatus(preview.title ? 'ok' : 'partial');
+      // A page without a product title is as good as unreadable for the person: same friendly hint.
+      if (preview.title) setStatus('ok');
+      else { setStatus('manual'); titleRef.current?.focus(); }
     } catch (err) {
       if (err.reason === 'bad_link') { setStatus('bad'); setError(err.message); return; }
       setStatus(err.reason === 'not_found' ? 'missing' : 'manual');
@@ -234,7 +236,6 @@ export function ItemForm({ wishlistId, item, initial, onDone, onCancel }) {
         {status === 'bad' ? <small className="field-error">{error}</small> : (
           <small className="muted">
             {status === 'loading' ? 'Looking up the product…' : status === 'ok' ? 'Filled in from the shop — check it below.' :
-              status === 'partial' ? 'The shop shared only part of the details — please complete them.' :
               status === 'manual' ? '' :
               status === 'missing' ? 'The shop says this page doesn’t exist. Check the link, or fill the item in by hand.' :
               status === 'button' ? 'Filled in from the shop page you opened — check it below.' : 'Paste a link and we try to fill in title, photo and price.'}
