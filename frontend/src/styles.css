@@ -409,8 +409,12 @@ details.meta-text p { margin: 8px 0 0; }
 
 /* ---------- Phones and tablets ---------- */
 /* Things for the "+ Bazhanka" bookmarklet only make sense with a mouse */
-@media (hover: none) and (pointer: coarse) {
+/* ...so they are hidden on touch screens and on phone-sized windows (also in a browser's phone mode
+   without touch simulation); .phone-only is the opposite */
+.phone-only { display: none; }
+@media (hover: none) and (pointer: coarse), (max-width: 640px) {
   .pointer-only { display: none !important; }
+  .phone-only { display: block; }
 }
 /* Gift ideas: the hidden radio inputs were sized against the whole page and pushed it sideways */
 .seg-opt { position: relative; }
@@ -442,3 +446,4 @@ details.meta-text p { margin: 8px 0 0; }
   .share-row { display: grid; grid-template-columns: 1fr 1fr; }
   .share-row input { grid-column: 1 / -1; }
 }
+.hidden { display: none !important; }
